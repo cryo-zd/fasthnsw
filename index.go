@@ -1,0 +1,112 @@
+package fasthnsw
+
+import (
+	"fmt"
+	"io"
+)
+
+// Result is one nearest-neighbor result returned by Search.
+type Result struct {
+	ID       int
+	Distance float32
+}
+
+// Index stores vectors and graph metadata for approximate nearest-neighbor
+// search. Its fields are intentionally private to keep the public API stable.
+type Index struct {
+	cfg Config
+}
+
+// New creates an index with validated configuration.
+func New(cfg Config) (*Index, error) {
+	cfg, err := normalizeConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &Index{cfg: cfg}, nil
+}
+
+// Build validates a dataset and will construct the FastHNSW graph in a later
+// implementation phase.
+func (idx *Index) Build(vectors [][]float32) error {
+	if idx == nil {
+		return fmt.Errorf("fasthnsw: nil index")
+	}
+	if _, err := validateVectors(vectors, idx.cfg.Dim); err != nil {
+		return err
+	}
+	return fmt.Errorf("%w: Build graph construction is not available yet", ErrNotImplemented)
+}
+
+// Search validates query parameters and will run HNSW search in a later
+// implementation phase.
+func (idx *Index) Search(query []float32, k int, efSearch int) ([]Result, error) {
+	if idx == nil {
+		return nil, fmt.Errorf("fasthnsw: nil index")
+	}
+	if k <= 0 {
+		return nil, fmt.Errorf("fasthnsw: k must be positive")
+	}
+	if efSearch <= 0 {
+		return nil, fmt.Errorf("fasthnsw: efSearch must be positive")
+	}
+	if efSearch < k {
+		return nil, fmt.Errorf("fasthnsw: efSearch must be greater than or equal to k")
+	}
+	if err := validateVector(query, idx.cfg.Dim, "query"); err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf("%w: Search is not available until graph construction is implemented", ErrNotImplemented)
+}
+
+// Save will write a versioned binary index format in a later implementation
+// phase.
+func (idx *Index) Save(w io.Writer) error {
+	if idx == nil {
+		return fmt.Errorf("fasthnsw: nil index")
+	}
+	if w == nil {
+		return fmt.Errorf("fasthnsw: nil writer")
+	}
+	return fmt.Errorf("%w: Save persistence is not available yet", ErrNotImplemented)
+}
+
+// Load will read a versioned binary index format in a later implementation
+// phase.
+func Load(r io.Reader) (*Index, error) {
+	if r == nil {
+		return nil, fmt.Errorf("fasthnsw: nil reader")
+	}
+	return nil, fmt.Errorf("%w: Load persistence is not available yet", ErrNotImplemented)
+}
+
+func validateVectors(vectors [][]float32, configuredDim int) (int, error) {
+	if len(vectors) == 0 {
+		return 0, fmt.Errorf("fasthnsw: vectors must not be empty")
+	}
+
+	dim := configuredDim
+	if dim == 0 {
+		dim = len(vectors[0])
+	}
+	if dim <= 0 {
+		return 0, fmt.Errorf("fasthnsw: vector dimension must be positive")
+	}
+
+	for i, vector := range vectors {
+		if len(vector) != dim {
+			return 0, fmt.Errorf("fasthnsw: vector %d has dimension %d, want %d", i, len(vector), dim)
+		}
+	}
+	return dim, nil
+}
+
+func validateVector(vector []float32, configuredDim int, name string) error {
+	if len(vector) == 0 {
+		return fmt.Errorf("fasthnsw: %s vector must not be empty", name)
+	}
+	if configuredDim > 0 && len(vector) != configuredDim {
+		return fmt.Errorf("fasthnsw: %s vector has dimension %d, want %d", name, len(vector), configuredDim)
+	}
+	return nil
+}
