@@ -16,6 +16,51 @@ func TestBuildValidatesVectorsBeforeNotImplemented(t *testing.T) {
 	if !errors.Is(err, ErrNotImplemented) {
 		t.Fatalf("Build error = %v, want ErrNotImplemented", err)
 	}
+	if idx.dim != 2 {
+		t.Fatalf("idx.dim = %d, want 2", idx.dim)
+	}
+	if idx.count != 2 {
+		t.Fatalf("idx.count = %d, want 2", idx.count)
+	}
+	if len(idx.vectors) != 4 {
+		t.Fatalf("len(idx.vectors) = %d, want 4", len(idx.vectors))
+	}
+	if idx.vectors[0] != 1 || idx.vectors[3] != 4 {
+		t.Fatalf("stored vectors = %v, want flattened input", idx.vectors)
+	}
+}
+
+func TestBuildInfersDimension(t *testing.T) {
+	idx, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	err = idx.Build([][]float32{{1, 2, 3}, {4, 5, 6}})
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("Build error = %v, want ErrNotImplemented", err)
+	}
+	if idx.dim != 3 {
+		t.Fatalf("idx.dim = %d, want 3", idx.dim)
+	}
+	if idx.cfg.Dim != 3 {
+		t.Fatalf("idx.cfg.Dim = %d, want 3", idx.cfg.Dim)
+	}
+}
+
+func TestBuildStoresNormalizedCosineVectors(t *testing.T) {
+	idx, err := New(Config{Metric: MetricCosine})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	err = idx.Build([][]float32{{3, 4}})
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("Build error = %v, want ErrNotImplemented", err)
+	}
+	if !almostEqual(idx.vectors[0], 0.6) || !almostEqual(idx.vectors[1], 0.8) {
+		t.Fatalf("stored cosine vector = %v, want normalized [0.6 0.8]", idx.vectors)
+	}
 }
 
 func TestBuildRejectsInvalidVectors(t *testing.T) {
@@ -43,6 +88,21 @@ func TestBuildRejectsInvalidVectors(t *testing.T) {
 				t.Fatalf("Build returned ErrNotImplemented before validation: %v", err)
 			}
 		})
+	}
+}
+
+func TestBuildRejectsCosineZeroVectorBeforeNotImplemented(t *testing.T) {
+	idx, err := New(Config{Metric: MetricCosine, Dim: 2})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	err = idx.Build([][]float32{{1, 0}, {0, 0}})
+	if err == nil {
+		t.Fatal("Build returned nil error")
+	}
+	if errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("Build returned ErrNotImplemented before cosine validation: %v", err)
 	}
 }
 

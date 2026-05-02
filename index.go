@@ -15,6 +15,14 @@ type Result struct {
 // search. Its fields are intentionally private to keep the public API stable.
 type Index struct {
 	cfg Config
+
+	// vectors is a flat count*dim block, even though Build accepts [][]float32.
+	// The flat layout improves locality for distance-heavy construction and
+	// search, avoids retaining caller-owned slice backing arrays, and keeps the
+	// future persistence format straightforward.
+	vectors []float32
+	dim     int
+	count   int
 }
 
 // New creates an index with validated configuration.
@@ -26,15 +34,20 @@ func New(cfg Config) (*Index, error) {
 	return &Index{cfg: cfg}, nil
 }
 
-// Build validates a dataset and will construct the FastHNSW graph in a later
-// implementation phase.
+// Build validates a dataset, copies it into the index-owned flat vector store,
+// and will construct the FastHNSW graph in a later implementation phase.
 func (idx *Index) Build(vectors [][]float32) error {
 	if idx == nil {
 		return fmt.Errorf("fasthnsw: nil index")
 	}
-	if _, err := validateVectors(vectors, idx.cfg.Dim); err != nil {
+	flat, dim, err := flattenVectors(vectors, idx.cfg.Dim, idx.cfg.Metric)
+	if err != nil {
 		return err
 	}
+	idx.vectors = flat
+	idx.dim = dim
+	idx.count = len(vectors)
+	idx.cfg.Dim = dim
 	return fmt.Errorf("%w: Build graph construction is not available yet", ErrNotImplemented)
 }
 
@@ -53,7 +66,11 @@ func (idx *Index) Search(query []float32, k int, efSearch int) ([]Result, error)
 	if efSearch < k {
 		return nil, fmt.Errorf("fasthnsw: efSearch must be greater than or equal to k")
 	}
-	if err := validateVector(query, idx.cfg.Dim, "query"); err != nil {
+	dim := idx.cfg.Dim
+	if idx.dim > 0 {
+		dim = idx.dim
+	}
+	if err := validateVector(query, dim, "query"); err != nil {
 		return nil, err
 	}
 	return nil, fmt.Errorf("%w: Search is not available until graph construction is implemented", ErrNotImplemented)
@@ -80,6 +97,7 @@ func Load(r io.Reader) (*Index, error) {
 	return nil, fmt.Errorf("%w: Load persistence is not available yet", ErrNotImplemented)
 }
 
+// validateVectors checks the public dataset shape and returns its dimension.
 func validateVectors(vectors [][]float32, configuredDim int) (int, error) {
 	if len(vectors) == 0 {
 		return 0, fmt.Errorf("fasthnsw: vectors must not be empty")
@@ -101,6 +119,9 @@ func validateVectors(vectors [][]float32, configuredDim int) (int, error) {
 	return dim, nil
 }
 
+// validateVector checks one public query or vector against a configured
+// dimension. A zero configured dimension means the caller has not fixed a
+// dimension yet.
 func validateVector(vector []float32, configuredDim int, name string) error {
 	if len(vector) == 0 {
 		return fmt.Errorf("fasthnsw: %s vector must not be empty", name)
