@@ -1,7 +1,5 @@
 package fasthnsw
 
-import "container/heap"
-
 // search runs the standard HNSW query procedure with a query already prepared
 // for the index metric. Each upper layer calls SEARCH-LAYER with ef=1, then
 // layer 0 calls SEARCH-LAYER with the caller-provided efSearch and returns the
@@ -33,52 +31,5 @@ func (idx *Index) search(query []float32, k int, efSearch int) ([]Result, error)
 // and evicts, the current worst retained result. Using a max-heap for C would
 // expand the farthest candidate first and would not match HNSW search.
 func (idx *Index) searchLayer(layer int, entries []int, query []float32, ef int) []Result {
-	visited := make([]bool, idx.count)
-	candidates := make(resultMinHeap, 0, ef)
-	results := make(resultMaxHeap, 0, ef)
-	heap.Init(&candidates)
-	heap.Init(&results)
-
-	for _, entry := range entries {
-		if entry < 0 || entry >= idx.count || visited[entry] {
-			continue
-		}
-		visited[entry] = true
-		result := idx.resultForNode(entry, query)
-		heap.Push(&candidates, result)
-		heap.Push(&results, result)
-	}
-
-	for candidates.Len() > 0 {
-		current := heap.Pop(&candidates).(Result)
-		if results.Len() > 0 && current.Distance > results.worst().Distance {
-			break
-		}
-
-		for _, neighborID := range idx.layers[layer][current.ID] {
-			if visited[neighborID] {
-				continue
-			}
-			visited[neighborID] = true
-
-			candidate := idx.resultForNode(neighborID, query)
-			if results.Len() < ef || betterResult(candidate, results.worst()) {
-				heap.Push(&candidates, candidate)
-				heap.Push(&results, candidate)
-				if results.Len() > ef {
-					heap.Pop(&results)
-				}
-			}
-		}
-	}
-
-	return results.sorted()
-}
-
-// resultForNode computes a query result for one stored vector id.
-func (idx *Index) resultForNode(id int, query []float32) Result {
-	return Result{
-		ID:       id,
-		Distance: distance(idx.cfg.Metric, vectorAt(idx.vectors, idx.dim, id), query),
-	}
+	return graphSearchLayer(idx.layers[layer], idx.vectors, idx.dim, idx.cfg.Metric, entries, query, ef)
 }
