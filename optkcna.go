@@ -35,7 +35,7 @@ func optKCNA(candidates [][]candidate, cfg optKCNAConfig, vectors []float32, dim
 		return nil, err
 	}
 	if cfg.ConnectComponents {
-		alphaGraph, err = connectWeakComponents(alphaGraph, vectors, dim, metric)
+		alphaGraph, err = connectWeakComponentsInPlace(alphaGraph, vectors, dim, metric)
 		if err != nil {
 			return nil, err
 		}
@@ -93,20 +93,26 @@ func candidatesFromResults(sourceID int, results []Result, limit int) []candidat
 	return out
 }
 
-// connectWeakComponents makes an intermediate alpha graph weakly connected.
+// connectWeakComponentsInPlace makes an intermediate alpha graph weakly
+// connected by mutating adjacency.
+//
+// This is intentionally in-place because OptKCNA owns the temporary alpha graph
+// produced for the current refresh step. Keeping a pre-repair copy is not
+// required by the algorithm and would add avoidable edge-slice allocations in
+// an IterNSG hot path.
+//
 // The main component is the largest weak component, with ties resolved by its
 // smallest node id. Each other component is connected to the growing main
 // component by the nearest cross-component pair, with ties resolved by source
 // id then target id.
-func connectWeakComponents(adjacency [][]int, vectors []float32, dim int, metric Metric) ([][]int, error) {
+func connectWeakComponentsInPlace(adjacency [][]int, vectors []float32, dim int, metric Metric) ([][]int, error) {
 	if err := validateAdjacencyForConstruction(adjacency, vectors, dim, metric); err != nil {
 		return nil, err
 	}
 
-	connected := cloneAdjacency(adjacency)
-	components := weakComponents(connected)
+	components := weakComponents(adjacency)
 	if len(components) <= 1 {
-		return normalizeAdjacencyForConstruction(connected, vectors, dim, metric), nil
+		return normalizeAdjacencyForConstruction(adjacency, vectors, dim, metric), nil
 	}
 
 	mainIndex := mainComponentIndex(components)
@@ -120,14 +126,14 @@ func connectWeakComponents(adjacency [][]int, vectors []float32, dim int, metric
 			continue
 		}
 		edge := nearestComponentBridge(component, mainSet, vectors, dim, metric)
-		connected[edge.source] = append(connected[edge.source], edge.target)
-		connected[edge.target] = append(connected[edge.target], edge.source)
+		adjacency[edge.source] = append(adjacency[edge.source], edge.target)
+		adjacency[edge.target] = append(adjacency[edge.target], edge.source)
 		for _, nodeID := range component {
 			mainSet[nodeID] = true
 		}
 	}
 
-	return normalizeAdjacencyForConstruction(connected, vectors, dim, metric), nil
+	return normalizeAdjacencyForConstruction(adjacency, vectors, dim, metric), nil
 }
 
 func validateAdjacencyForConstruction(adjacency [][]int, vectors []float32, dim int, metric Metric) error {
@@ -152,14 +158,6 @@ func validateAdjacencyForConstruction(adjacency [][]int, vectors []float32, dim 
 		}
 	}
 	return nil
-}
-
-func cloneAdjacency(adjacency [][]int) [][]int {
-	out := make([][]int, len(adjacency))
-	for i, neighbors := range adjacency {
-		out[i] = append([]int(nil), neighbors...)
-	}
-	return out
 }
 
 func weakComponents(adjacency [][]int) [][]int {

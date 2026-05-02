@@ -72,7 +72,7 @@ func TestOptKCNAOutputsSortedCandidatesWithoutSelf(t *testing.T) {
 	}
 }
 
-func TestConnectWeakComponentsAddsDeterministicBridge(t *testing.T) {
+func TestConnectWeakComponentsInPlaceAddsDeterministicBridge(t *testing.T) {
 	flat, dim, err := flattenVectors([][]float32{
 		{0},
 		{1},
@@ -89,9 +89,9 @@ func TestConnectWeakComponentsAddsDeterministicBridge(t *testing.T) {
 		{2},
 	}
 
-	got, err := connectWeakComponents(adjacency, flat, dim, MetricL2)
+	got, err := connectWeakComponentsInPlace(adjacency, flat, dim, MetricL2)
 	if err != nil {
-		t.Fatalf("connectWeakComponents returned error: %v", err)
+		t.Fatalf("connectWeakComponentsInPlace returned error: %v", err)
 	}
 	want := [][]int{
 		{1},
@@ -100,6 +100,30 @@ func TestConnectWeakComponentsAddsDeterministicBridge(t *testing.T) {
 		{2},
 	}
 	assertAdjacency(t, got, want)
+}
+
+func TestConnectWeakComponentsInPlaceMutatesAdjacency(t *testing.T) {
+	flat, dim, err := flattenVectors([][]float32{
+		{0},
+		{1},
+		{10},
+	}, 0, MetricL2)
+	if err != nil {
+		t.Fatalf("flattenVectors returned error: %v", err)
+	}
+	adjacency := [][]int{
+		{1},
+		{0},
+		nil,
+	}
+
+	_, err = connectWeakComponentsInPlace(adjacency, flat, dim, MetricL2)
+	if err != nil {
+		t.Fatalf("connectWeakComponentsInPlace returned error: %v", err)
+	}
+	if len(adjacency[2]) == 0 {
+		t.Fatalf("adjacency was not mutated with a repair edge: %v", adjacency)
+	}
 }
 
 func TestOptKCNAConnectivityRepairCanReachOtherComponent(t *testing.T) {
