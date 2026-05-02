@@ -1,7 +1,6 @@
 package fasthnsw
 
 import (
-	"errors"
 	"fmt"
 	"runtime"
 )
@@ -25,10 +24,6 @@ const (
 	defaultSeed           = int64(1)
 	minAlpha              = 60
 )
-
-// ErrNotImplemented is returned by API methods that are present for the
-// intended public surface but whose algorithmic implementation is not complete.
-var ErrNotImplemented = errors.New("fasthnsw: not implemented")
 
 // Config controls index construction and search behavior.
 //
