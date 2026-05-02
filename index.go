@@ -81,8 +81,8 @@ func (idx *Index) Search(query []float32, k int, efSearch int) ([]Result, error)
 	if err != nil {
 		return nil, err
 	}
-	if err := idx.validateSearchableGraph(); err != nil {
-		return nil, err
+	if !idx.graphReady {
+		return nil, ErrIndexNotBuilt
 	}
 	return idx.search(preparedQuery, k, efSearch)
 }

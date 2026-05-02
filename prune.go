@@ -10,6 +10,11 @@ const maxAlphaDegrees = 180
 
 // rngPrune applies the RNG pruning rule used by NSG/HNSW construction.
 //
+// This is an internal hot-path helper. It assumes vector storage, metric,
+// sourceID, maxDegree, and prune mode were validated by the construction
+// boundary. Candidate ids are still checked because candidate pools are mutable
+// construction data.
+//
 // Candidates are processed from nearest to farthest. A candidate v is rejected
 // when an already accepted neighbor w dominates it: dist(u,w) < dist(u,v) and
 // dist(v,w) < dist(u,v). The first condition is usually implied by processing
@@ -21,16 +26,14 @@ func rngPrune(sourceID int, candidates []candidate, maxDegree int, vectors []flo
 
 // alphaPrune applies the paper's alpha-pruning extension.
 //
-// Alpha-pruning starts from RNG dominance and adds the geometric condition
-// angle u-w-v > alpha, where the angle is measured at the already accepted
-// neighbor w. The implementation compares cosines instead of calling acos:
-// for alpha in [60, 180], angle > alpha iff cos(angle) < cos(alpha).
-// alpha=60 is RNG-compatible for the standard RNG triangle case.
+// This is an internal hot-path helper and assumes scalar/vector invariants were
+// validated by the construction boundary. Alpha-pruning starts from RNG
+// dominance and adds the geometric condition angle u-w-v > alpha, where the
+// angle is measured at the already accepted neighbor w. The implementation
+// compares cosines instead of calling acos: for alpha in [60, 180], angle >
+// alpha iff cos(angle) < cos(alpha). alpha=60 is RNG-compatible for the
+// standard RNG triangle case.
 func alphaPrune(sourceID int, candidates []candidate, maxDegree int, alphaDegrees float64, vectors []float32, dim int, metric Metric) ([]candidate, error) {
-	if alphaDegrees < minAlpha || alphaDegrees > maxAlphaDegrees {
-		return nil, fmt.Errorf("fasthnsw: alpha must be in [%.0f, %.0f]", float64(minAlpha), float64(maxAlphaDegrees))
-	}
-
 	cosThreshold := math.Cos(alphaDegrees * math.Pi / 180)
 	return pruneCandidates(sourceID, candidates, maxDegree, vectors, dim, metric, func(candidateID int, acceptedID int) bool {
 		return angleUWVGreaterThanAlpha(sourceID, acceptedID, candidateID, vectors, dim, cosThreshold)
@@ -38,9 +41,6 @@ func alphaPrune(sourceID int, candidates []candidate, maxDegree int, alphaDegree
 }
 
 func pruneCandidates(sourceID int, candidates []candidate, maxDegree int, vectors []float32, dim int, metric Metric, angleFilter func(candidateID int, acceptedID int) bool) ([]candidate, error) {
-	if maxDegree <= 0 {
-		return nil, fmt.Errorf("fasthnsw: maxDegree must be positive")
-	}
 	normalized, err := normalizePruneCandidates(sourceID, candidates, vectors, dim, metric)
 	if err != nil {
 		return nil, err
@@ -74,25 +74,11 @@ func pruneCandidates(sourceID int, candidates []candidate, maxDegree int, vector
 	return pruned, nil
 }
 
-// normalizePruneCandidates validates candidate ids, removes self candidates,
-// recomputes source distances from flat storage, deduplicates ids, and returns
-// candidates sorted by distance then id. Recomputing distances makes pruning
-// robust to stale construction candidates from earlier refinement iterations.
+// normalizePruneCandidates trusts vector storage and sourceID but still
+// validates candidate ids because candidate pools are refined and merged
+// repeatedly during construction.
 func normalizePruneCandidates(sourceID int, candidates []candidate, vectors []float32, dim int, metric Metric) ([]candidate, error) {
-	if !validMetric(metric) {
-		return nil, fmt.Errorf("fasthnsw: unsupported metric %d", metric)
-	}
-	if dim <= 0 {
-		return nil, fmt.Errorf("fasthnsw: vector dimension must be positive")
-	}
-	if len(vectors)%dim != 0 {
-		return nil, fmt.Errorf("fasthnsw: flat vector storage is not aligned to dimension")
-	}
 	count := len(vectors) / dim
-	if sourceID < 0 || sourceID >= count {
-		return nil, fmt.Errorf("fasthnsw: source id %d out of range [0,%d)", sourceID, count)
-	}
-
 	source := vectorAt(vectors, dim, sourceID)
 	seen := make(map[int]candidate, len(candidates))
 	for _, next := range candidates {

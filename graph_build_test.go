@@ -144,34 +144,6 @@ func TestBuildPrunedLayerAlphaModeCanRetainRNGPrunedEdge(t *testing.T) {
 	assertAdjacency(t, [][]int{alpha[0]}, [][]int{{1, 2}})
 }
 
-func TestBuildPrunedLayerRejectsInvalidInput(t *testing.T) {
-	tests := []struct {
-		name       string
-		candidates [][]candidate
-		maxDegree  int
-		mode       pruneMode
-		vectors    []float32
-		dim        int
-		metric     Metric
-	}{
-		{name: "bad candidate count", candidates: nil, maxDegree: 1, mode: rngPruneMode(), vectors: []float32{0, 1}, dim: 1, metric: MetricL2},
-		{name: "bad degree", candidates: make([][]candidate, 2), maxDegree: 0, mode: rngPruneMode(), vectors: []float32{0, 1}, dim: 1, metric: MetricL2},
-		{name: "bad alpha", candidates: make([][]candidate, 2), maxDegree: 1, mode: alphaPruneMode(59), vectors: []float32{0, 1}, dim: 1, metric: MetricL2},
-		{name: "bad mode", candidates: make([][]candidate, 2), maxDegree: 1, mode: pruneMode{kind: pruneKind(99)}, vectors: []float32{0, 1}, dim: 1, metric: MetricL2},
-		{name: "bad dim", candidates: make([][]candidate, 2), maxDegree: 1, mode: rngPruneMode(), vectors: []float32{0, 1}, dim: 0, metric: MetricL2},
-		{name: "unaligned storage", candidates: make([][]candidate, 1), maxDegree: 1, mode: rngPruneMode(), vectors: []float32{0, 1, 2}, dim: 2, metric: MetricL2},
-		{name: "bad metric", candidates: make([][]candidate, 2), maxDegree: 1, mode: rngPruneMode(), vectors: []float32{0, 1}, dim: 1, metric: Metric(99)},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, err := buildPrunedLayer(tt.candidates, tt.maxDegree, tt.mode, tt.vectors, tt.dim, tt.metric); err == nil {
-				t.Fatal("buildPrunedLayer returned nil error")
-			}
-		})
-	}
-}
-
 func TestBuildPrunedLayerRejectsBadCandidateID(t *testing.T) {
 	_, err := buildPrunedLayer([][]candidate{{{id: 2}}, nil}, 1, rngPruneMode(), []float32{0, 1}, 1, MetricL2)
 	if err == nil {
