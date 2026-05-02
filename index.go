@@ -5,12 +5,6 @@ import (
 	"io"
 )
 
-// Result is one nearest-neighbor result returned by Search.
-type Result struct {
-	ID       int
-	Distance float32
-}
-
 // Index stores vectors and graph metadata for approximate nearest-neighbor
 // search. Its fields are intentionally private to keep the public API stable.
 type Index struct {
@@ -23,6 +17,14 @@ type Index struct {
 	vectors []float32
 	dim     int
 	count   int
+
+	// layers stores HNSW adjacency as layers[layer][nodeID] -> neighbor ids.
+	// Construction phases populate this metadata; Phase 3 search can operate on
+	// hand-built graphs in tests before FastHNSW construction exists.
+	layers     [][][]int
+	entryPoint int
+	maxLayer   int
+	graphReady bool
 }
 
 // New creates an index with validated configuration.
@@ -31,7 +33,7 @@ func New(cfg Config) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Index{cfg: cfg}, nil
+	return &Index{cfg: cfg, entryPoint: -1, maxLayer: -1}, nil
 }
 
 // Build validates a dataset, copies it into the index-owned flat vector store,
@@ -48,11 +50,13 @@ func (idx *Index) Build(vectors [][]float32) error {
 	idx.dim = dim
 	idx.count = len(vectors)
 	idx.cfg.Dim = dim
+	idx.resetGraph()
 	return fmt.Errorf("%w: Build graph construction is not available yet", ErrNotImplemented)
 }
 
-// Search validates query parameters and will run HNSW search in a later
-// implementation phase.
+// Search returns the approximate nearest neighbors for query using HNSW graph
+// traversal. Graph construction is not implemented yet, so indexes built only
+// through Build currently report that the searchable graph is unavailable.
 func (idx *Index) Search(query []float32, k int, efSearch int) ([]Result, error) {
 	if idx == nil {
 		return nil, fmt.Errorf("fasthnsw: nil index")
@@ -73,7 +77,14 @@ func (idx *Index) Search(query []float32, k int, efSearch int) ([]Result, error)
 	if err := validateVector(query, dim, "query"); err != nil {
 		return nil, err
 	}
-	return nil, fmt.Errorf("%w: Search is not available until graph construction is implemented", ErrNotImplemented)
+	preparedQuery, err := prepareQuery(idx.cfg.Metric, query)
+	if err != nil {
+		return nil, err
+	}
+	if err := idx.validateSearchableGraph(); err != nil {
+		return nil, err
+	}
+	return idx.search(preparedQuery, k, efSearch)
 }
 
 // Save will write a versioned binary index format in a later implementation

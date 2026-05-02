@@ -106,7 +106,7 @@ func TestBuildRejectsCosineZeroVectorBeforeNotImplemented(t *testing.T) {
 	}
 }
 
-func TestSearchValidatesInputsBeforeNotImplemented(t *testing.T) {
+func TestSearchValidatesInputsBeforeGraphCheck(t *testing.T) {
 	idx, err := New(Config{Dim: 2})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
@@ -117,9 +117,7 @@ func TestSearchValidatesInputsBeforeNotImplemented(t *testing.T) {
 		query    []float32
 		k        int
 		efSearch int
-		wantStub bool
 	}{
-		{name: "valid", query: []float32{1, 2}, k: 1, efSearch: 2, wantStub: true},
 		{name: "empty query", query: nil, k: 1, efSearch: 2},
 		{name: "wrong dimension", query: []float32{1}, k: 1, efSearch: 2},
 		{name: "bad k", query: []float32{1, 2}, k: 0, efSearch: 2},
@@ -130,19 +128,28 @@ func TestSearchValidatesInputsBeforeNotImplemented(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := idx.Search(tt.query, tt.k, tt.efSearch)
-			if tt.wantStub {
-				if !errors.Is(err, ErrNotImplemented) {
-					t.Fatalf("Search error = %v, want ErrNotImplemented", err)
-				}
-				return
-			}
 			if err == nil {
 				t.Fatal("Search returned nil error")
 			}
 			if errors.Is(err, ErrNotImplemented) {
-				t.Fatalf("Search returned ErrNotImplemented before validation: %v", err)
+				t.Fatalf("Search returned ErrNotImplemented before input validation: %v", err)
 			}
 		})
+	}
+}
+
+func TestSearchUnbuiltIndexReturnsNotBuilt(t *testing.T) {
+	idx, err := New(Config{Dim: 2})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	_, err = idx.Search([]float32{1, 2}, 1, 1)
+	if !errors.Is(err, ErrIndexNotBuilt) {
+		t.Fatalf("Search error = %v, want ErrIndexNotBuilt", err)
+	}
+	if errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("Search returned ErrNotImplemented for unbuilt index: %v", err)
 	}
 }
 
