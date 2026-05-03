@@ -201,11 +201,15 @@ func buildIterNSGLayer(layer int, nodes []int, totalCount int, vectors []float32
 		return nil, err
 	}
 
-	localAdjacency, err := buildPrunedLayer(candidates, maxDegree, rngPruneMode(), localVectors, dim, cfg.Metric)
+	localAdjacency, err := buildFinalHNSWLayer(candidates, maxDegree, localVectors, dim, cfg.Metric)
 	if err != nil {
 		return nil, err
 	}
 	return mapLayerAdjacencyToGlobal(localAdjacency, nodes, totalCount), nil
+}
+
+func buildFinalHNSWLayer(candidates [][]candidate, maxDegree int, vectors []float32, dim int, metric Metric) ([][]int, error) {
+	return buildPrunedLayer(candidates, maxDegree, rngPruneMode(), vectors, dim, metric)
 }
 
 func fastHNSWOptKCNAConfig(cfg Config, candidateK int, searchEf int, maxDegree int) optKCNAConfig {
