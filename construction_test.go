@@ -119,6 +119,34 @@ func TestFastHNSWOptKCNAConfigDisablesConnectivityRepair(t *testing.T) {
 	}
 }
 
+func TestFinalHNSWLayerUsesRNGPruning(t *testing.T) {
+	flat, dim, err := flattenVectors([][]float32{
+		{0, 0},
+		{1, 0},
+		{1, 1},
+	}, 0, MetricL2)
+	if err != nil {
+		t.Fatalf("flattenVectors returned error: %v", err)
+	}
+	candidates := [][]candidate{
+		{{id: 1}, {id: 2}},
+		nil,
+		nil,
+	}
+
+	finalLayer, err := buildFinalHNSWLayer(candidates, 4, flat, dim, MetricL2)
+	if err != nil {
+		t.Fatalf("buildFinalHNSWLayer returned error: %v", err)
+	}
+	alphaLayer, err := buildPrunedLayer(candidates, 4, alphaPruneMode(120), flat, dim, MetricL2)
+	if err != nil {
+		t.Fatalf("buildPrunedLayer alpha returned error: %v", err)
+	}
+
+	assertAdjacency(t, [][]int{finalLayer[0]}, [][]int{{1}})
+	assertAdjacency(t, [][]int{alphaLayer[0]}, [][]int{{1, 2}})
+}
+
 func TestBuildIsDeterministicWithFixedSeed(t *testing.T) {
 	vectors := deterministicVectors(48, 3)
 	cfg := Config{Dim: 3, M: 4, K0: 8, EfConstruction: 8, Iterations: 1, Seed: 17}
