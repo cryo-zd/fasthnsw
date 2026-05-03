@@ -16,13 +16,15 @@ const (
 )
 
 const (
-	defaultM              = 32
-	defaultEfConstruction = 200
-	defaultK0             = 200
-	defaultAlpha          = 67
-	defaultIterations     = 2
-	defaultSeed           = int64(1)
-	minAlpha              = 60
+	defaultM                 = 32
+	defaultEfConstruction    = 200
+	defaultK0                = 200
+	defaultAlpha             = 67
+	defaultIterations        = 2
+	defaultSeed              = int64(1)
+	defaultCandidateRecall   = 0.98
+	defaultCandidateControls = 100
+	minAlpha                 = 60
 )
 
 // Config controls index construction and search behavior.
@@ -39,19 +41,28 @@ type Config struct {
 	Iterations     int
 	Seed           int64
 	Workers        int
+	// CandidateRecall is the IterNSG candidate-quality requirement. A zero
+	// value uses the package default.
+	CandidateRecall float64
+	// CandidateControls is the number of deterministic control nodes used by
+	// the IterNSG candidate-quality estimator. A zero value uses the package
+	// default.
+	CandidateControls int
 }
 
 // DefaultConfig returns deterministic defaults suitable for a first index.
 func DefaultConfig() Config {
 	return Config{
-		Metric:         MetricL2,
-		M:              defaultM,
-		EfConstruction: defaultEfConstruction,
-		K0:             defaultK0,
-		Alpha:          defaultAlpha,
-		Iterations:     defaultIterations,
-		Seed:           defaultSeed,
-		Workers:        runtime.GOMAXPROCS(0),
+		Metric:            MetricL2,
+		M:                 defaultM,
+		EfConstruction:    defaultEfConstruction,
+		K0:                defaultK0,
+		Alpha:             defaultAlpha,
+		Iterations:        defaultIterations,
+		Seed:              defaultSeed,
+		Workers:           runtime.GOMAXPROCS(0),
+		CandidateRecall:   defaultCandidateRecall,
+		CandidateControls: defaultCandidateControls,
 	}
 }
 
@@ -85,6 +96,12 @@ func normalizeConfig(cfg Config) (Config, error) {
 	if cfg.Workers == 0 {
 		cfg.Workers = defaults.Workers
 	}
+	if cfg.CandidateRecall == 0 {
+		cfg.CandidateRecall = defaults.CandidateRecall
+	}
+	if cfg.CandidateControls == 0 {
+		cfg.CandidateControls = defaults.CandidateControls
+	}
 
 	if cfg.M < 0 {
 		return Config{}, fmt.Errorf("fasthnsw: M must be positive")
@@ -98,11 +115,20 @@ func normalizeConfig(cfg Config) (Config, error) {
 	if cfg.Alpha < minAlpha {
 		return Config{}, fmt.Errorf("fasthnsw: Alpha must be at least %.0f", float64(minAlpha))
 	}
+	if cfg.Alpha > maxAlphaDegrees {
+		return Config{}, fmt.Errorf("fasthnsw: Alpha must be at most %.0f", float64(maxAlphaDegrees))
+	}
 	if cfg.Iterations < 0 {
 		return Config{}, fmt.Errorf("fasthnsw: Iterations must be positive")
 	}
 	if cfg.Workers < 0 {
 		return Config{}, fmt.Errorf("fasthnsw: Workers must be positive")
+	}
+	if cfg.CandidateRecall <= 0 || cfg.CandidateRecall > 1 {
+		return Config{}, fmt.Errorf("fasthnsw: CandidateRecall must be in (0,1]")
+	}
+	if cfg.CandidateControls < 0 {
+		return Config{}, fmt.Errorf("fasthnsw: CandidateControls must be positive")
 	}
 
 	return cfg, nil

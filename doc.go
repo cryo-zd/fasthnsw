@@ -1,7 +1,8 @@
 // Package fasthnsw provides a pure Go approximate nearest neighbor index
 // planned around the FastHNSW construction strategy.
 //
-// The initial implementation exposes the intended public API, configuration
-// defaults, and validation behavior. Graph construction, ANN search, and
-// persistence are implemented in later project phases.
+// The initial implementation exposes the public API, configuration defaults,
+// validation behavior, FastHNSW-style in-memory graph construction, and ANN
+// search.
+// Persistence is implemented in a later project phase.
 package fasthnsw

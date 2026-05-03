@@ -143,6 +143,65 @@ func TestExactCandidatesCosineUsesNormalizedVectors(t *testing.T) {
 	assertCandidates(t, got, want)
 }
 
+func TestApproximateKNNGCandidatesAreBoundedSortedAndDeterministic(t *testing.T) {
+	flat, dim, err := flattenVectors(lineVectors(64), 0, MetricL2)
+	if err != nil {
+		t.Fatalf("flattenVectors returned error: %v", err)
+	}
+
+	left, err := approximateKNNGCandidates(flat, dim, MetricL2, 6, 42, 4)
+	if err != nil {
+		t.Fatalf("approximateKNNGCandidates returned error: %v", err)
+	}
+	right, err := approximateKNNGCandidates(flat, dim, MetricL2, 6, 42, 4)
+	if err != nil {
+		t.Fatalf("approximateKNNGCandidates second run returned error: %v", err)
+	}
+	assertCandidates(t, left, right)
+
+	for sourceID, candidates := range left {
+		if len(candidates) > 6 {
+			t.Fatalf("len(candidates[%d]) = %d, want <= 6", sourceID, len(candidates))
+		}
+		for i, candidate := range candidates {
+			if candidate.id == sourceID {
+				t.Fatalf("candidates[%d] contains self: %v", sourceID, candidates)
+			}
+			if i > 0 && betterCandidate(candidate, candidates[i-1]) {
+				t.Fatalf("candidates[%d] not sorted: %v", sourceID, candidates)
+			}
+		}
+	}
+}
+
+func TestApproximateKNNGCandidatesRecallAgainstExact(t *testing.T) {
+	flat, dim, err := flattenVectors(lineVectors(80), 0, MetricL2)
+	if err != nil {
+		t.Fatalf("flattenVectors returned error: %v", err)
+	}
+	approx, err := approximateKNNGCandidates(flat, dim, MetricL2, 8, 7, 6)
+	if err != nil {
+		t.Fatalf("approximateKNNGCandidates returned error: %v", err)
+	}
+	exact, err := exactCandidates(flat, dim, MetricL2, 8)
+	if err != nil {
+		t.Fatalf("exactCandidates returned error: %v", err)
+	}
+
+	recall := candidateRecall(approx, exact, 8)
+	if recall < 0.70 {
+		t.Fatalf("candidate recall = %.3f, want >= 0.70", recall)
+	}
+}
+
+func TestInitialApproxNeighborIDsUseSeed(t *testing.T) {
+	left := initialApproxNeighborIDs(128, 5, 12, 1)
+	right := initialApproxNeighborIDs(128, 5, 12, 2)
+	if sameIDSet(left, right) {
+		t.Fatal("initialApproxNeighborIDs returned identical sets for different seeds")
+	}
+}
+
 func assertCandidates(t *testing.T, got, want [][]candidate) {
 	t.Helper()
 
@@ -162,4 +221,45 @@ func assertCandidates(t *testing.T, got, want [][]candidate) {
 			}
 		}
 	}
+}
+
+func candidateRecall(got [][]candidate, want [][]candidate, k int) float64 {
+	var hits int
+	var total int
+	for sourceID := range want {
+		wantIDs := make(map[int]bool, k)
+		for i := 0; i < k && i < len(want[sourceID]); i++ {
+			wantIDs[want[sourceID][i].id] = true
+			total++
+		}
+		for i := 0; i < k && i < len(got[sourceID]); i++ {
+			if wantIDs[got[sourceID][i].id] {
+				hits++
+			}
+		}
+	}
+	if total == 0 {
+		return 1
+	}
+	return float64(hits) / float64(total)
+}
+
+func sameIDSet(left map[int]struct{}, right map[int]struct{}) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for id := range left {
+		if _, ok := right[id]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func lineVectors(count int) [][]float32 {
+	vectors := make([][]float32, count)
+	for id := 0; id < count; id++ {
+		vectors[id] = []float32{float32(id)}
+	}
+	return vectors
 }

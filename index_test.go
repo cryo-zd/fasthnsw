@@ -6,15 +6,15 @@ import (
 	"testing"
 )
 
-func TestBuildValidatesVectorsBeforeNotImplemented(t *testing.T) {
+func TestBuildStoresVectorsAndConstructsGraph(t *testing.T) {
 	idx, err := New(Config{Dim: 2})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
 
 	err = idx.Build([][]float32{{1, 2}, {3, 4}})
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("Build error = %v, want ErrNotImplemented", err)
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
 	}
 	if idx.dim != 2 {
 		t.Fatalf("idx.dim = %d, want 2", idx.dim)
@@ -28,6 +28,18 @@ func TestBuildValidatesVectorsBeforeNotImplemented(t *testing.T) {
 	if idx.vectors[0] != 1 || idx.vectors[3] != 4 {
 		t.Fatalf("stored vectors = %v, want flattened input", idx.vectors)
 	}
+	if !idx.graphReady {
+		t.Fatal("idx.graphReady = false, want true")
+	}
+	if idx.entryPoint < 0 {
+		t.Fatalf("idx.entryPoint = %d, want non-negative", idx.entryPoint)
+	}
+	if len(idx.layers) == 0 {
+		t.Fatal("idx.layers is empty")
+	}
+	if len(idx.levels) != idx.count {
+		t.Fatalf("len(idx.levels) = %d, want %d", len(idx.levels), idx.count)
+	}
 }
 
 func TestBuildInfersDimension(t *testing.T) {
@@ -37,8 +49,8 @@ func TestBuildInfersDimension(t *testing.T) {
 	}
 
 	err = idx.Build([][]float32{{1, 2, 3}, {4, 5, 6}})
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("Build error = %v, want ErrNotImplemented", err)
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
 	}
 	if idx.dim != 3 {
 		t.Fatalf("idx.dim = %d, want 3", idx.dim)
@@ -55,8 +67,8 @@ func TestBuildStoresNormalizedCosineVectors(t *testing.T) {
 	}
 
 	err = idx.Build([][]float32{{3, 4}})
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("Build error = %v, want ErrNotImplemented", err)
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
 	}
 	if !almostEqual(idx.vectors[0], 0.6) || !almostEqual(idx.vectors[1], 0.8) {
 		t.Fatalf("stored cosine vector = %v, want normalized [0.6 0.8]", idx.vectors)
@@ -84,14 +96,11 @@ func TestBuildRejectsInvalidVectors(t *testing.T) {
 			if err == nil {
 				t.Fatal("Build returned nil error")
 			}
-			if errors.Is(err, ErrNotImplemented) {
-				t.Fatalf("Build returned ErrNotImplemented before validation: %v", err)
-			}
 		})
 	}
 }
 
-func TestBuildRejectsCosineZeroVectorBeforeNotImplemented(t *testing.T) {
+func TestBuildRejectsCosineZeroVector(t *testing.T) {
 	idx, err := New(Config{Metric: MetricCosine, Dim: 2})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
@@ -100,9 +109,6 @@ func TestBuildRejectsCosineZeroVectorBeforeNotImplemented(t *testing.T) {
 	err = idx.Build([][]float32{{1, 0}, {0, 0}})
 	if err == nil {
 		t.Fatal("Build returned nil error")
-	}
-	if errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("Build returned ErrNotImplemented before cosine validation: %v", err)
 	}
 }
 
@@ -131,9 +137,6 @@ func TestSearchValidatesInputsBeforeGraphCheck(t *testing.T) {
 			if err == nil {
 				t.Fatal("Search returned nil error")
 			}
-			if errors.Is(err, ErrNotImplemented) {
-				t.Fatalf("Search returned ErrNotImplemented before input validation: %v", err)
-			}
 		})
 	}
 }
@@ -148,9 +151,6 @@ func TestSearchUnbuiltIndexReturnsNotBuilt(t *testing.T) {
 	if !errors.Is(err, ErrIndexNotBuilt) {
 		t.Fatalf("Search error = %v, want ErrIndexNotBuilt", err)
 	}
-	if errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("Search returned ErrNotImplemented for unbuilt index: %v", err)
-	}
 }
 
 func TestSearchTrustsReadyGraphInHotPath(t *testing.T) {
@@ -159,8 +159,8 @@ func TestSearchTrustsReadyGraphInHotPath(t *testing.T) {
 		t.Fatalf("New returned error: %v", err)
 	}
 	err = idx.Build([][]float32{{0, 0}, {1, 0}})
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("Build error = %v, want ErrNotImplemented", err)
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
 	}
 
 	idx.layers = [][][]int{{{1}}}

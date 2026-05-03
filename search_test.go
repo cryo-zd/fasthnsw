@@ -95,8 +95,8 @@ func newTestIndexWithGraph(t *testing.T, metric Metric, vectors [][]float32, lay
 		t.Fatalf("New returned error: %v", err)
 	}
 	err = idx.Build(vectors)
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("Build error = %v, want ErrNotImplemented", err)
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
 	}
 
 	idx.layers = layers

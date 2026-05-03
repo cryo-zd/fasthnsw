@@ -155,6 +155,38 @@ func TestOptKCNAConnectivityRepairCanReachOtherComponent(t *testing.T) {
 	})
 }
 
+func TestOptKCNAPreservesOrImprovesCandidateRecall(t *testing.T) {
+	flat, dim, err := flattenVectors(lineVectors(48), 0, MetricL2)
+	if err != nil {
+		t.Fatalf("flattenVectors returned error: %v", err)
+	}
+	initial, err := approximateKNNGCandidates(flat, dim, MetricL2, 4, 5, 2)
+	if err != nil {
+		t.Fatalf("approximateKNNGCandidates returned error: %v", err)
+	}
+	exact, err := exactCandidates(flat, dim, MetricL2, 6)
+	if err != nil {
+		t.Fatalf("exactCandidates returned error: %v", err)
+	}
+
+	refreshed, err := optKCNA(initial, optKCNAConfig{
+		CandidateK:        6,
+		SearchEf:          8,
+		MaxDegree:         6,
+		AlphaDegrees:      90,
+		ConnectComponents: true,
+	}, flat, dim, MetricL2)
+	if err != nil {
+		t.Fatalf("optKCNA returned error: %v", err)
+	}
+
+	before := candidateRecall(initial, exact, 6)
+	after := candidateRecall(refreshed, exact, 6)
+	if after < before {
+		t.Fatalf("candidate recall decreased from %.3f to %.3f", before, after)
+	}
+}
+
 func TestOptKCNARejectsInvalidInput(t *testing.T) {
 	tests := []struct {
 		name       string
