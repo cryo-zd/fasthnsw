@@ -82,6 +82,43 @@ func TestBuildUsesDoubleDegreeOnBaseLayer(t *testing.T) {
 	}
 }
 
+func TestBuildHNSWLayerCompletesWhenDegreeEqualsBound(t *testing.T) {
+	flat, dim, err := flattenVectors(lineVectors(3), 0, MetricL2)
+	if err != nil {
+		t.Fatalf("flattenVectors returned error: %v", err)
+	}
+
+	got, err := buildHNSWLayer(1, []int{0, 1, 2}, 3, flat, dim, Config{Metric: MetricL2}, 2)
+	if err != nil {
+		t.Fatalf("buildHNSWLayer returned error: %v", err)
+	}
+	for sourceID, neighbors := range got {
+		if len(neighbors) != 2 {
+			t.Fatalf("len(adjacency[%d]) = %d, want complete degree 2: %v", sourceID, len(neighbors), neighbors)
+		}
+	}
+}
+
+func TestFastHNSWOptKCNAConfigDisablesConnectivityRepair(t *testing.T) {
+	cfg := fastHNSWOptKCNAConfig(Config{Alpha: 90}, 12, 24, 6)
+
+	if cfg.CandidateK != 12 {
+		t.Fatalf("CandidateK = %d, want 12", cfg.CandidateK)
+	}
+	if cfg.SearchEf != 24 {
+		t.Fatalf("SearchEf = %d, want 24", cfg.SearchEf)
+	}
+	if cfg.MaxDegree != 6 {
+		t.Fatalf("MaxDegree = %d, want 6", cfg.MaxDegree)
+	}
+	if cfg.AlphaDegrees != 90 {
+		t.Fatalf("AlphaDegrees = %v, want 90", cfg.AlphaDegrees)
+	}
+	if cfg.ConnectComponents {
+		t.Fatal("ConnectComponents = true, want false for FastHNSW/HNSW construction")
+	}
+}
+
 func TestBuildIsDeterministicWithFixedSeed(t *testing.T) {
 	vectors := deterministicVectors(48, 3)
 	cfg := Config{Dim: 3, M: 4, K0: 8, EfConstruction: 8, Iterations: 1, Seed: 17}
@@ -184,6 +221,36 @@ func TestAcquireCandidatesByGraphSearchDropsSelfAndKeepsNearest(t *testing.T) {
 		{id: 1, distance: 1},
 		{id: 3, distance: 1},
 	})
+}
+
+func TestEstimateCandidateRecallUsesFixedControls(t *testing.T) {
+	flat, dim, err := flattenVectors(lineVectors(20), 0, MetricL2)
+	if err != nil {
+		t.Fatalf("flattenVectors returned error: %v", err)
+	}
+	candidates, err := exactCandidates(flat, dim, MetricL2, 4)
+	if err != nil {
+		t.Fatalf("exactCandidates returned error: %v", err)
+	}
+	cfg := candidateQualityConfig{
+		TargetRecall: 0.98,
+		ControlIDs:   []int{1, 3, 5, 7},
+		Seed:         1,
+		K:            4,
+	}
+
+	left, err := estimateCandidateRecall(candidates, cfg, flat, dim, MetricL2)
+	if err != nil {
+		t.Fatalf("estimateCandidateRecall returned error: %v", err)
+	}
+	cfg.Seed = 99
+	right, err := estimateCandidateRecall(candidates, cfg, flat, dim, MetricL2)
+	if err != nil {
+		t.Fatalf("estimateCandidateRecall second run returned error: %v", err)
+	}
+	if left != right {
+		t.Fatalf("fixed-control recall = %v and %v, want equal", left, right)
+	}
 }
 
 func TestBuildLayerInvariants(t *testing.T) {

@@ -11,6 +11,7 @@ const minApproxKNNGIterations = 4
 type candidateQualityConfig struct {
 	TargetRecall float64
 	Controls     int
+	ControlIDs   []int
 	Seed         int64
 	K            int
 }
@@ -122,7 +123,7 @@ func nodesAtOrAboveLayer(levels []int, layer int) []int {
 // layer's HNSW bound: M for upper layers and 2*M for layer 0. Larger layers use
 // IterNSG and final RNG pruning.
 func buildHNSWLayer(layer int, nodes []int, totalCount int, vectors []float32, dim int, cfg Config, maxDegree int) ([][]int, error) {
-	if len(nodes) <= maxDegree {
+	if len(nodes)-1 <= maxDegree {
 		return buildCompleteLayer(nodes, totalCount, vectors, dim, cfg.Metric), nil
 	}
 	return buildIterNSGLayer(layer, nodes, totalCount, vectors, dim, cfg, maxDegree)
@@ -162,10 +163,7 @@ func buildIterNSGLayer(layer int, nodes []int, totalCount int, vectors []float32
 	if initialK > len(nodes)-1 {
 		initialK = len(nodes) - 1
 	}
-	candidateK := cfg.EfConstruction
-	if candidateK < maxDegree {
-		candidateK = maxDegree
-	}
+	candidateK := cfg.CandidateK
 	if candidateK > len(nodes)-1 {
 		candidateK = len(nodes) - 1
 	}
@@ -182,24 +180,20 @@ func buildIterNSGLayer(layer int, nodes []int, totalCount int, vectors []float32
 		return nil, err
 	}
 
-	searchEf := cfg.EfConstruction
-	if searchEf < candidateK {
-		searchEf = candidateK
+	searchEf := cfg.ConstructionL
+	if searchEf > len(nodes)-1 {
+		searchEf = len(nodes) - 1
 	}
 	initialGraph := candidatesToAdjacency(initialKNNG)
 	candidates := acquireCandidatesByGraphSearch(initialGraph, localVectors, dim, cfg.Metric, candidateK, searchEf)
 
-	refreshCfg := optKCNAConfig{
-		CandidateK:        candidateK,
-		SearchEf:          searchEf,
-		MaxDegree:         maxDegree,
-		AlphaDegrees:      cfg.Alpha,
-		ConnectComponents: true,
-	}
+	refreshCfg := fastHNSWOptKCNAConfig(cfg, candidateK, searchEf, maxDegree)
+	controlSeed := mixSeed(cfg.Seed, int64(layer), int64(candidateK))
 	qualityCfg := candidateQualityConfig{
 		TargetRecall: cfg.CandidateRecall,
 		Controls:     cfg.CandidateControls,
-		Seed:         mixSeed(cfg.Seed, int64(layer), int64(candidateK)),
+		ControlIDs:   selectCandidateControls(len(nodes), cfg.CandidateControls, controlSeed),
+		Seed:         controlSeed,
 		K:            candidateK,
 	}
 	candidates, _, err = refineCandidatesUntilRecall(candidates, refreshCfg, qualityCfg, localVectors, dim, cfg.Metric, cfg.Iterations)
@@ -212,6 +206,16 @@ func buildIterNSGLayer(layer int, nodes []int, totalCount int, vectors []float32
 		return nil, err
 	}
 	return mapLayerAdjacencyToGlobal(localAdjacency, nodes, totalCount), nil
+}
+
+func fastHNSWOptKCNAConfig(cfg Config, candidateK int, searchEf int, maxDegree int) optKCNAConfig {
+	return optKCNAConfig{
+		CandidateK:        candidateK,
+		SearchEf:          searchEf,
+		MaxDegree:         maxDegree,
+		AlphaDegrees:      cfg.Alpha,
+		ConnectComponents: false,
+	}
 }
 
 func baseLayerMaxDegree(cfg Config) int {
@@ -285,7 +289,10 @@ func estimateCandidateRecall(candidates [][]candidate, cfg candidateQualityConfi
 	if count == 0 {
 		return 1, nil
 	}
-	controls := selectCandidateControls(count, cfg.Controls, cfg.Seed)
+	controls := cfg.ControlIDs
+	if controls == nil {
+		controls = selectCandidateControls(count, cfg.Controls, cfg.Seed)
+	}
 	var hits int
 	var total int
 	for _, sourceID := range controls {

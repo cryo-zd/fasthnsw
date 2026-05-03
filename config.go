@@ -19,6 +19,8 @@ const (
 	defaultM                 = 32
 	defaultEfConstruction    = 200
 	defaultK0                = 200
+	defaultCandidateK        = 200
+	defaultConstructionL     = 200
 	defaultAlpha             = 67
 	defaultIterations        = 2
 	defaultSeed              = int64(1)
@@ -32,15 +34,24 @@ const (
 // A zero value for tunable construction fields uses the package defaults.
 // Dim may be zero to infer dimensionality from the dataset during Build.
 type Config struct {
-	Metric         Metric
-	Dim            int
-	M              int
+	Metric Metric
+	Dim    int
+	M      int
+	// EfConstruction is kept as a backward-compatible alias for ConstructionL
+	// when ConstructionL is zero.
 	EfConstruction int
-	K0             int
-	Alpha          float64
-	Iterations     int
-	Seed           int64
-	Workers        int
+	// K0 is Algorithm 6's initial approximate KNNG size.
+	K0 int
+	// CandidateK is Algorithm 6's k: the retained k-CNA candidate count. A zero
+	// value defaults to ConstructionL after aliases are resolved.
+	CandidateK int
+	// ConstructionL is Algorithm 6's L: the graph-search width used to acquire
+	// and refresh k-CNA candidates. A zero value uses EfConstruction.
+	ConstructionL int
+	Alpha         float64
+	Iterations    int
+	Seed          int64
+	Workers       int
 	// CandidateRecall is the IterNSG candidate-quality requirement. A zero
 	// value uses the package default.
 	CandidateRecall float64
@@ -57,6 +68,8 @@ func DefaultConfig() Config {
 		M:                 defaultM,
 		EfConstruction:    defaultEfConstruction,
 		K0:                defaultK0,
+		CandidateK:        defaultCandidateK,
+		ConstructionL:     defaultConstructionL,
 		Alpha:             defaultAlpha,
 		Iterations:        defaultIterations,
 		Seed:              defaultSeed,
@@ -80,6 +93,12 @@ func normalizeConfig(cfg Config) (Config, error) {
 	}
 	if cfg.EfConstruction == 0 {
 		cfg.EfConstruction = defaults.EfConstruction
+	}
+	if cfg.ConstructionL == 0 {
+		cfg.ConstructionL = cfg.EfConstruction
+	}
+	if cfg.CandidateK == 0 {
+		cfg.CandidateK = cfg.ConstructionL
 	}
 	if cfg.K0 == 0 {
 		cfg.K0 = defaults.K0
@@ -111,6 +130,15 @@ func normalizeConfig(cfg Config) (Config, error) {
 	}
 	if cfg.K0 < 0 {
 		return Config{}, fmt.Errorf("fasthnsw: K0 must be positive")
+	}
+	if cfg.CandidateK < 0 {
+		return Config{}, fmt.Errorf("fasthnsw: CandidateK must be positive")
+	}
+	if cfg.ConstructionL < 0 {
+		return Config{}, fmt.Errorf("fasthnsw: ConstructionL must be positive")
+	}
+	if cfg.ConstructionL < cfg.CandidateK {
+		return Config{}, fmt.Errorf("fasthnsw: ConstructionL must be greater than or equal to CandidateK")
 	}
 	if cfg.Alpha < minAlpha {
 		return Config{}, fmt.Errorf("fasthnsw: Alpha must be at least %.0f", float64(minAlpha))
