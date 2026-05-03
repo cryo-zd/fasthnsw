@@ -17,6 +17,12 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.K0 != defaultK0 {
 		t.Fatalf("default K0 = %d, want %d", cfg.K0, defaultK0)
 	}
+	if cfg.CandidateK != defaultCandidateK {
+		t.Fatalf("default CandidateK = %d, want %d", cfg.CandidateK, defaultCandidateK)
+	}
+	if cfg.ConstructionL != defaultConstructionL {
+		t.Fatalf("default ConstructionL = %d, want %d", cfg.ConstructionL, defaultConstructionL)
+	}
 	if cfg.Alpha != defaultAlpha {
 		t.Fatalf("default Alpha = %v, want %v", cfg.Alpha, defaultAlpha)
 	}
@@ -58,6 +64,35 @@ func TestNewNormalizesZeroConfig(t *testing.T) {
 	if idx.cfg.Workers <= 0 {
 		t.Fatalf("normalized Workers = %d, want positive", idx.cfg.Workers)
 	}
+	if idx.cfg.CandidateK != idx.cfg.ConstructionL {
+		t.Fatalf("normalized CandidateK = %d, want ConstructionL %d", idx.cfg.CandidateK, idx.cfg.ConstructionL)
+	}
+}
+
+func TestNewUsesEfConstructionAsConstructionLAlias(t *testing.T) {
+	idx, err := New(Config{EfConstruction: 64})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	if idx.cfg.ConstructionL != 64 {
+		t.Fatalf("ConstructionL = %d, want EfConstruction alias 64", idx.cfg.ConstructionL)
+	}
+	if idx.cfg.CandidateK != 64 {
+		t.Fatalf("CandidateK = %d, want default to ConstructionL 64", idx.cfg.CandidateK)
+	}
+}
+
+func TestNewSeparatesCandidateKAndConstructionL(t *testing.T) {
+	idx, err := New(Config{CandidateK: 16, ConstructionL: 64})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	if idx.cfg.CandidateK != 16 {
+		t.Fatalf("CandidateK = %d, want 16", idx.cfg.CandidateK)
+	}
+	if idx.cfg.ConstructionL != 64 {
+		t.Fatalf("ConstructionL = %d, want 64", idx.cfg.ConstructionL)
+	}
 }
 
 func TestNewRejectsInvalidConfig(t *testing.T) {
@@ -70,6 +105,9 @@ func TestNewRejectsInvalidConfig(t *testing.T) {
 		{name: "m", cfg: Config{M: -1}},
 		{name: "ef construction", cfg: Config{EfConstruction: -1}},
 		{name: "k0", cfg: Config{K0: -1}},
+		{name: "candidate k", cfg: Config{CandidateK: -1}},
+		{name: "construction l", cfg: Config{ConstructionL: -1}},
+		{name: "construction l less than candidate k", cfg: Config{CandidateK: 16, ConstructionL: 8}},
 		{name: "alpha", cfg: Config{Alpha: 59}},
 		{name: "alpha high", cfg: Config{Alpha: 181}},
 		{name: "iterations", cfg: Config{Iterations: -1}},
