@@ -153,6 +153,28 @@ func TestSearchUnbuiltIndexReturnsNotBuilt(t *testing.T) {
 	}
 }
 
+func TestSearchTrustsReadyGraphInHotPath(t *testing.T) {
+	idx, err := New(Config{Dim: 2})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	err = idx.Build([][]float32{{0, 0}, {1, 0}})
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("Build error = %v, want ErrNotImplemented", err)
+	}
+
+	idx.layers = [][][]int{{{1}}}
+	idx.entryPoint = 0
+	idx.maxLayer = 0
+	idx.graphReady = true
+
+	got, err := idx.Search([]float32{0, 0}, 1, 1)
+	if err != nil {
+		t.Fatalf("Search returned error: %v", err)
+	}
+	assertResults(t, got, []Result{{ID: 0, Distance: 0}})
+}
+
 func TestSaveAndLoadReturnNotImplemented(t *testing.T) {
 	idx, err := New(DefaultConfig())
 	if err != nil {

@@ -50,8 +50,18 @@ func (idx *Index) Build(vectors [][]float32) error {
 	idx.dim = dim
 	idx.count = len(vectors)
 	idx.cfg.Dim = dim
-	idx.resetGraph()
+	idx.resetSearchableGraph()
 	return fmt.Errorf("%w: Build graph construction is not available yet", ErrNotImplemented)
+}
+
+// resetSearchableGraph clears graph metadata when index-owned vectors are
+// replaced or future construction rebuilds the graph. It only resets state;
+// graph invariants are established by construction code, not revalidated here.
+func (idx *Index) resetSearchableGraph() {
+	idx.layers = nil
+	idx.entryPoint = -1
+	idx.maxLayer = -1
+	idx.graphReady = false
 }
 
 // Search returns the approximate nearest neighbors for query using HNSW graph
@@ -81,8 +91,8 @@ func (idx *Index) Search(query []float32, k int, efSearch int) ([]Result, error)
 	if err != nil {
 		return nil, err
 	}
-	if err := idx.validateSearchableGraph(); err != nil {
-		return nil, err
+	if !idx.graphReady {
+		return nil, ErrIndexNotBuilt
 	}
 	return idx.search(preparedQuery, k, efSearch)
 }

@@ -35,10 +35,7 @@ func optKCNA(candidates [][]candidate, cfg optKCNAConfig, vectors []float32, dim
 		return nil, err
 	}
 	if cfg.ConnectComponents {
-		alphaGraph, err = connectWeakComponentsInPlace(alphaGraph, vectors, dim, metric)
-		if err != nil {
-			return nil, err
-		}
+		alphaGraph = connectWeakComponentsInPlace(alphaGraph, vectors, dim, metric)
 	}
 
 	refreshed := make([][]candidate, count)
@@ -105,14 +102,10 @@ func candidatesFromResults(sourceID int, results []Result, limit int) []candidat
 // smallest node id. Each other component is connected to the growing main
 // component by the nearest cross-component pair, with ties resolved by source
 // id then target id.
-func connectWeakComponentsInPlace(adjacency [][]int, vectors []float32, dim int, metric Metric) ([][]int, error) {
-	if err := validateAdjacencyForConstruction(adjacency, vectors, dim, metric); err != nil {
-		return nil, err
-	}
-
+func connectWeakComponentsInPlace(adjacency [][]int, vectors []float32, dim int, metric Metric) [][]int {
 	components := weakComponents(adjacency)
 	if len(components) <= 1 {
-		return normalizeAdjacencyForConstruction(adjacency, vectors, dim, metric), nil
+		return normalizeAdjacencyForConstruction(adjacency, vectors, dim, metric)
 	}
 
 	mainIndex := mainComponentIndex(components)
@@ -133,31 +126,7 @@ func connectWeakComponentsInPlace(adjacency [][]int, vectors []float32, dim int,
 		}
 	}
 
-	return normalizeAdjacencyForConstruction(adjacency, vectors, dim, metric), nil
-}
-
-func validateAdjacencyForConstruction(adjacency [][]int, vectors []float32, dim int, metric Metric) error {
-	if !validMetric(metric) {
-		return fmt.Errorf("fasthnsw: unsupported metric %d", metric)
-	}
-	if dim <= 0 {
-		return fmt.Errorf("fasthnsw: vector dimension must be positive")
-	}
-	if len(vectors)%dim != 0 {
-		return fmt.Errorf("fasthnsw: flat vector storage is not aligned to dimension")
-	}
-	count := len(vectors) / dim
-	if len(adjacency) != count {
-		return fmt.Errorf("fasthnsw: adjacency count %d, want %d", len(adjacency), count)
-	}
-	for sourceID, neighbors := range adjacency {
-		for _, neighborID := range neighbors {
-			if neighborID < 0 || neighborID >= count {
-				return fmt.Errorf("fasthnsw: adjacency[%d] has neighbor %d out of range [0,%d)", sourceID, neighborID, count)
-			}
-		}
-	}
-	return nil
+	return normalizeAdjacencyForConstruction(adjacency, vectors, dim, metric)
 }
 
 func weakComponents(adjacency [][]int) [][]int {

@@ -1,7 +1,5 @@
 package fasthnsw
 
-import "fmt"
-
 type pruneKind int
 
 const (
@@ -35,11 +33,7 @@ func alphaPruneMode(alphaDegrees float64) pruneMode {
 // degree bound. The output shape matches Index.layers[layer]: adjacency[nodeID]
 // is a deterministic list of neighbor ids ordered by candidate distance then id.
 func buildPrunedLayer(candidates [][]candidate, maxDegree int, mode pruneMode, vectors []float32, dim int, metric Metric) ([][]int, error) {
-	count, err := validatePrunedLayerInput(candidates, maxDegree, mode, vectors, dim, metric)
-	if err != nil {
-		return nil, err
-	}
-
+	count := len(vectors) / dim
 	adjacency := make([][]int, count)
 	if count == 0 {
 		return adjacency, nil
@@ -72,44 +66,6 @@ func buildPrunedLayer(candidates [][]candidate, maxDegree int, mode pruneMode, v
 	return adjacency, nil
 }
 
-func validatePrunedLayerInput(candidates [][]candidate, maxDegree int, mode pruneMode, vectors []float32, dim int, metric Metric) (int, error) {
-	if maxDegree <= 0 {
-		return 0, fmt.Errorf("fasthnsw: maxDegree must be positive")
-	}
-	if !validMetric(metric) {
-		return 0, fmt.Errorf("fasthnsw: unsupported metric %d", metric)
-	}
-	if dim <= 0 {
-		return 0, fmt.Errorf("fasthnsw: vector dimension must be positive")
-	}
-	if len(vectors)%dim != 0 {
-		return 0, fmt.Errorf("fasthnsw: flat vector storage is not aligned to dimension")
-	}
-	if err := validatePruneMode(mode); err != nil {
-		return 0, err
-	}
-
-	count := len(vectors) / dim
-	if len(candidates) != count {
-		return 0, fmt.Errorf("fasthnsw: candidate list count %d, want %d", len(candidates), count)
-	}
-	return count, nil
-}
-
-func validatePruneMode(mode pruneMode) error {
-	switch mode.kind {
-	case pruneKindRNG:
-		return nil
-	case pruneKindAlpha:
-		if mode.alphaDegrees < minAlpha || mode.alphaDegrees > maxAlphaDegrees {
-			return fmt.Errorf("fasthnsw: alpha must be in [%.0f, %.0f]", float64(minAlpha), float64(maxAlphaDegrees))
-		}
-		return nil
-	default:
-		return fmt.Errorf("fasthnsw: unsupported prune mode %d", mode.kind)
-	}
-}
-
 func applyPruneMode(sourceID int, candidates []candidate, maxDegree int, mode pruneMode, vectors []float32, dim int, metric Metric) ([]candidate, error) {
 	switch mode.kind {
 	case pruneKindRNG:
@@ -117,7 +73,7 @@ func applyPruneMode(sourceID int, candidates []candidate, maxDegree int, mode pr
 	case pruneKindAlpha:
 		return alphaPrune(sourceID, candidates, maxDegree, mode.alphaDegrees, vectors, dim, metric)
 	default:
-		return nil, fmt.Errorf("fasthnsw: unsupported prune mode %d", mode.kind)
+		panic("fasthnsw: unsupported prune mode")
 	}
 }
 

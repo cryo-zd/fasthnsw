@@ -89,10 +89,7 @@ func TestConnectWeakComponentsInPlaceAddsDeterministicBridge(t *testing.T) {
 		{2},
 	}
 
-	got, err := connectWeakComponentsInPlace(adjacency, flat, dim, MetricL2)
-	if err != nil {
-		t.Fatalf("connectWeakComponentsInPlace returned error: %v", err)
-	}
+	got := connectWeakComponentsInPlace(adjacency, flat, dim, MetricL2)
 	want := [][]int{
 		{1},
 		{0, 2},
@@ -117,10 +114,7 @@ func TestConnectWeakComponentsInPlaceMutatesAdjacency(t *testing.T) {
 		nil,
 	}
 
-	_, err = connectWeakComponentsInPlace(adjacency, flat, dim, MetricL2)
-	if err != nil {
-		t.Fatalf("connectWeakComponentsInPlace returned error: %v", err)
-	}
+	_ = connectWeakComponentsInPlace(adjacency, flat, dim, MetricL2)
 	if len(adjacency[2]) == 0 {
 		t.Fatalf("adjacency was not mutated with a repair edge: %v", adjacency)
 	}
