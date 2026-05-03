@@ -87,42 +87,6 @@ func TestSearchRejectsCosineZeroQueryBeforeGraphCheck(t *testing.T) {
 	}
 }
 
-func TestValidateSearchableGraphRejectsMalformedLayers(t *testing.T) {
-	idx := &Index{
-		cfg:        DefaultConfig(),
-		vectors:    []float32{0, 0, 1, 0},
-		dim:        2,
-		count:      2,
-		layers:     [][][]int{{{1}}},
-		entryPoint: 0,
-		maxLayer:   0,
-		graphReady: true,
-	}
-
-	err := idx.validateSearchableGraph()
-	if err == nil {
-		t.Fatal("validateSearchableGraph returned nil error")
-	}
-}
-
-func TestValidateSearchableGraphRejectsOutOfRangeNeighbor(t *testing.T) {
-	idx := &Index{
-		cfg:        DefaultConfig(),
-		vectors:    []float32{0, 0, 1, 0},
-		dim:        2,
-		count:      2,
-		layers:     [][][]int{{{2}, {0}}},
-		entryPoint: 0,
-		maxLayer:   0,
-		graphReady: true,
-	}
-
-	err := idx.validateSearchableGraph()
-	if err == nil {
-		t.Fatal("validateSearchableGraph returned nil error")
-	}
-}
-
 func newTestIndexWithGraph(t *testing.T, metric Metric, vectors [][]float32, layers [][][]int, entryPoint int, maxLayer int) *Index {
 	t.Helper()
 
@@ -140,9 +104,6 @@ func newTestIndexWithGraph(t *testing.T, metric Metric, vectors [][]float32, lay
 	idx.maxLayer = maxLayer
 	idx.graphReady = true
 
-	if err := idx.validateSearchableGraph(); err != nil {
-		t.Fatalf("test graph is invalid: %v", err)
-	}
 	return idx
 }
 

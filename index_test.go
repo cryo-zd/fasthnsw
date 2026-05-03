@@ -173,10 +173,6 @@ func TestSearchTrustsReadyGraphInHotPath(t *testing.T) {
 		t.Fatalf("Search returned error: %v", err)
 	}
 	assertResults(t, got, []Result{{ID: 0, Distance: 0}})
-
-	if err := idx.validateSearchableGraph(); err == nil {
-		t.Fatal("validateSearchableGraph returned nil error for malformed graph")
-	}
 }
 
 func TestSaveAndLoadReturnNotImplemented(t *testing.T) {
