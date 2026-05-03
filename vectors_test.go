@@ -1,9 +1,6 @@
 package fasthnsw
 
-import (
-	"errors"
-	"testing"
-)
+import "testing"
 
 func TestFlattenVectorsL2(t *testing.T) {
 	flat, dim, err := flattenVectors([][]float32{{1, 2}, {3, 4}}, 0, MetricL2)
@@ -38,9 +35,6 @@ func TestFlattenVectorsRejectsCosineZeroVector(t *testing.T) {
 	_, _, err := flattenVectors([][]float32{{1, 0}, {0, 0}}, 0, MetricCosine)
 	if err == nil {
 		t.Fatal("flattenVectors returned nil error")
-	}
-	if errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("flattenVectors returned ErrNotImplemented: %v", err)
 	}
 }
 

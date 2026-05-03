@@ -19,9 +19,10 @@ type Index struct {
 	count   int
 
 	// layers stores HNSW adjacency as layers[layer][nodeID] -> neighbor ids.
-	// Construction phases populate this metadata; Phase 3 search can operate on
-	// hand-built graphs in tests before FastHNSW construction exists.
+	// Build populates this metadata through global layer-by-layer construction;
+	// tests may still install hand-built graphs to isolate search behavior.
 	layers     [][][]int
+	levels     []int
 	entryPoint int
 	maxLayer   int
 	graphReady bool
@@ -37,7 +38,7 @@ func New(cfg Config) (*Index, error) {
 }
 
 // Build validates a dataset, copies it into the index-owned flat vector store,
-// and will construct the FastHNSW graph in a later implementation phase.
+// and constructs the searchable FastHNSW graph.
 func (idx *Index) Build(vectors [][]float32) error {
 	if idx == nil {
 		return fmt.Errorf("fasthnsw: nil index")
@@ -51,7 +52,11 @@ func (idx *Index) Build(vectors [][]float32) error {
 	idx.count = len(vectors)
 	idx.cfg.Dim = dim
 	idx.resetSearchableGraph()
-	return fmt.Errorf("%w: Build graph construction is not available yet", ErrNotImplemented)
+	if err := idx.buildSearchableGraph(); err != nil {
+		idx.resetSearchableGraph()
+		return err
+	}
+	return nil
 }
 
 // resetSearchableGraph clears graph metadata when index-owned vectors are
@@ -59,14 +64,14 @@ func (idx *Index) Build(vectors [][]float32) error {
 // graph invariants are established by construction code, not revalidated here.
 func (idx *Index) resetSearchableGraph() {
 	idx.layers = nil
+	idx.levels = nil
 	idx.entryPoint = -1
 	idx.maxLayer = -1
 	idx.graphReady = false
 }
 
 // Search returns the approximate nearest neighbors for query using HNSW graph
-// traversal. Graph construction is not implemented yet, so indexes built only
-// through Build currently report that the searchable graph is unavailable.
+// traversal over the graph produced by Build.
 func (idx *Index) Search(query []float32, k int, efSearch int) ([]Result, error) {
 	if idx == nil {
 		return nil, fmt.Errorf("fasthnsw: nil index")

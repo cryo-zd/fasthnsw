@@ -29,6 +29,12 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Workers <= 0 {
 		t.Fatalf("default Workers = %d, want positive", cfg.Workers)
 	}
+	if cfg.CandidateRecall != defaultCandidateRecall {
+		t.Fatalf("default CandidateRecall = %v, want %v", cfg.CandidateRecall, defaultCandidateRecall)
+	}
+	if cfg.CandidateControls != defaultCandidateControls {
+		t.Fatalf("default CandidateControls = %d, want %d", cfg.CandidateControls, defaultCandidateControls)
+	}
 }
 
 func TestNewAcceptsDefaultConfig(t *testing.T) {
@@ -65,8 +71,12 @@ func TestNewRejectsInvalidConfig(t *testing.T) {
 		{name: "ef construction", cfg: Config{EfConstruction: -1}},
 		{name: "k0", cfg: Config{K0: -1}},
 		{name: "alpha", cfg: Config{Alpha: 59}},
+		{name: "alpha high", cfg: Config{Alpha: 181}},
 		{name: "iterations", cfg: Config{Iterations: -1}},
 		{name: "workers", cfg: Config{Workers: -1}},
+		{name: "candidate recall low", cfg: Config{CandidateRecall: -1}},
+		{name: "candidate recall high", cfg: Config{CandidateRecall: 1.01}},
+		{name: "candidate controls", cfg: Config{CandidateControls: -1}},
 	}
 
 	for _, tt := range tests {
