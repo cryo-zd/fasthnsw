@@ -2,7 +2,6 @@
 // planned around the FastHNSW construction strategy.
 //
 // The initial implementation exposes the public API, configuration defaults,
-// validation behavior, FastHNSW-style in-memory graph construction, and ANN
-// search.
-// Persistence is implemented in a later project phase.
+// validation behavior, FastHNSW-style graph construction, ANN search, and
+// versioned binary persistence.
 package fasthnsw

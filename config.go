@@ -2,6 +2,7 @@ package fasthnsw
 
 import (
 	"fmt"
+	"math"
 	"runtime"
 )
 
@@ -140,6 +141,9 @@ func normalizeConfig(cfg Config) (Config, error) {
 	if cfg.ConstructionL < cfg.CandidateK {
 		return Config{}, fmt.Errorf("fasthnsw: ConstructionL must be greater than or equal to CandidateK")
 	}
+	if math.IsNaN(cfg.Alpha) || math.IsInf(cfg.Alpha, 0) {
+		return Config{}, fmt.Errorf("fasthnsw: Alpha must be finite")
+	}
 	if cfg.Alpha < minAlpha {
 		return Config{}, fmt.Errorf("fasthnsw: Alpha must be at least %.0f", float64(minAlpha))
 	}
@@ -151,6 +155,9 @@ func normalizeConfig(cfg Config) (Config, error) {
 	}
 	if cfg.Workers < 0 {
 		return Config{}, fmt.Errorf("fasthnsw: Workers must be positive")
+	}
+	if math.IsNaN(cfg.CandidateRecall) || math.IsInf(cfg.CandidateRecall, 0) {
+		return Config{}, fmt.Errorf("fasthnsw: CandidateRecall must be finite")
 	}
 	if cfg.CandidateRecall <= 0 || cfg.CandidateRecall > 1 {
 		return Config{}, fmt.Errorf("fasthnsw: CandidateRecall must be in (0,1]")

@@ -1,6 +1,9 @@
 package fasthnsw
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
@@ -110,10 +113,12 @@ func TestNewRejectsInvalidConfig(t *testing.T) {
 		{name: "construction l less than candidate k", cfg: Config{CandidateK: 16, ConstructionL: 8}},
 		{name: "alpha", cfg: Config{Alpha: 59}},
 		{name: "alpha high", cfg: Config{Alpha: 181}},
+		{name: "alpha nan", cfg: Config{Alpha: math.NaN()}},
 		{name: "iterations", cfg: Config{Iterations: -1}},
 		{name: "workers", cfg: Config{Workers: -1}},
 		{name: "candidate recall low", cfg: Config{CandidateRecall: -1}},
 		{name: "candidate recall high", cfg: Config{CandidateRecall: 1.01}},
+		{name: "candidate recall nan", cfg: Config{CandidateRecall: math.NaN()}},
 		{name: "candidate controls", cfg: Config{CandidateControls: -1}},
 	}
 
