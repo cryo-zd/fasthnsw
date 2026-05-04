@@ -1,9 +1,6 @@
 package core
 
-import (
-	"math"
-	"testing"
-)
+import "testing"
 
 func TestSquaredL2(t *testing.T) {
 	got := squaredL2([]float32{1, 2, 3}, []float32{4, 2, -1})
@@ -41,8 +38,4 @@ func TestCosineDistanceNormalized(t *testing.T) {
 	if got := cosineDistanceNormalized(a, a); got != 0 {
 		t.Fatalf("identical cosine distance = %v, want 0", got)
 	}
-}
-
-func almostEqual(got, want float32) bool {
-	return math.Abs(float64(got-want)) < 1e-6
 }

@@ -3,6 +3,8 @@ package core
 import (
 	"reflect"
 	"testing"
+
+	"github.com/cryo-zd/fasthnsw/internal/synth"
 )
 
 func TestBuildSearchesTinyCompleteLayer(t *testing.T) {
@@ -148,7 +150,7 @@ func TestFinalHNSWLayerUsesRNGPruning(t *testing.T) {
 }
 
 func TestBuildIsDeterministicWithFixedSeed(t *testing.T) {
-	vectors := deterministicVectors(48, 3)
+	vectors := synth.UniformVectors(48, 3)
 	cfg := Config{Dim: 3, M: 4, K0: 8, EfConstruction: 8, Iterations: 1, Seed: 17}
 
 	left := mustBuildIndex(t, cfg, vectors)
@@ -282,7 +284,7 @@ func TestEstimateCandidateRecallUsesFixedControls(t *testing.T) {
 }
 
 func TestBuildLayerInvariants(t *testing.T) {
-	vectors := deterministicVectors(40, 2)
+	vectors := synth.UniformVectors(40, 2)
 	cfg := Config{Dim: 2, M: 4, K0: 8, EfConstruction: 8, Iterations: 1, Seed: 23}
 	idx := mustBuildIndex(t, cfg, vectors)
 
@@ -332,29 +334,4 @@ func TestBuildLayerInvariants(t *testing.T) {
 			}
 		}
 	}
-}
-
-func mustBuildIndex(t *testing.T, cfg Config, vectors [][]float32) *Index {
-	t.Helper()
-
-	idx, err := New(cfg)
-	if err != nil {
-		t.Fatalf("New returned error: %v", err)
-	}
-	if err := idx.Build(vectors); err != nil {
-		t.Fatalf("Build returned error: %v", err)
-	}
-	return idx
-}
-
-func deterministicVectors(count int, dim int) [][]float32 {
-	vectors := make([][]float32, count)
-	for id := 0; id < count; id++ {
-		vector := make([]float32, dim)
-		for d := 0; d < dim; d++ {
-			vector[d] = float32((id+1)*(d+3)%17) + float32(d)/10
-		}
-		vectors[id] = vector
-	}
-	return vectors
 }

@@ -7,18 +7,6 @@ import (
 	"github.com/cryo-zd/fasthnsw/internal/synth"
 )
 
-func TestGeneratedDatasetsAreDeterministic(t *testing.T) {
-	if !synth.SameVectors(synth.UniformVectors(16, 3), synth.UniformVectors(16, 3)) {
-		t.Fatal("uniformVectors is not deterministic")
-	}
-	if !synth.SameVectors(synth.ClusteredVectors(24, 4, 3), synth.ClusteredVectors(24, 4, 3)) {
-		t.Fatal("clusteredVectors is not deterministic")
-	}
-	if !synth.SameVectors(synth.ClusteredQueries(12, 4, 3), synth.ClusteredQueries(12, 4, 3)) {
-		t.Fatal("clusteredQueries is not deterministic")
-	}
-}
-
 func TestBuildSearchRecallClusteredData(t *testing.T) {
 	vectors := synth.ClusteredVectors(180, 6, 6)
 	queries := synth.ClusteredQueries(36, 6, 6)

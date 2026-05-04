@@ -79,19 +79,3 @@ func TestExactTopKRejectsInvalidInput(t *testing.T) {
 		})
 	}
 }
-
-func assertResults(t *testing.T, got, want []Result) {
-	t.Helper()
-
-	if len(got) != len(want) {
-		t.Fatalf("len(results) = %d, want %d: %v", len(got), len(want), got)
-	}
-	for i := range want {
-		if got[i].ID != want[i].ID {
-			t.Fatalf("result %d ID = %d, want %d", i, got[i].ID, want[i].ID)
-		}
-		if !almostEqual(got[i].Distance, want[i].Distance) {
-			t.Fatalf("result %d distance = %v, want %v", i, got[i].Distance, want[i].Distance)
-		}
-	}
-}
