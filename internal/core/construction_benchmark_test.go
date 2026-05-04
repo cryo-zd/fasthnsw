@@ -44,9 +44,9 @@ func BenchmarkDistanceCosine(b *testing.B) {
 }
 
 func BenchmarkCandidateAcquisition(b *testing.B) {
-	vectors, dim, err := flattenVectors(synth.UniformVectors(256, 8), 0, MetricL2)
+	vectors, dim, err := FlattenVectors(synth.UniformVectors(256, 8), 0, MetricL2)
 	if err != nil {
-		b.Fatalf("flattenVectors returned error: %v", err)
+		b.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	b.ReportAllocs()
@@ -59,9 +59,9 @@ func BenchmarkCandidateAcquisition(b *testing.B) {
 }
 
 func BenchmarkLayerConstruction(b *testing.B) {
-	vectors, dim, err := flattenVectors(synth.UniformVectors(256, 8), 0, MetricL2)
+	vectors, dim, err := FlattenVectors(synth.UniformVectors(256, 8), 0, MetricL2)
 	if err != nil {
-		b.Fatalf("flattenVectors returned error: %v", err)
+		b.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	nodes := make([]int, 256)
 	for i := range nodes {

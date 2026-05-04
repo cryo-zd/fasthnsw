@@ -2,7 +2,7 @@ package core
 
 import "fmt"
 
-// flattenVectors validates and copies public [][]float32 input into the flat
+// FlattenVectors validates and copies public [][]float32 input into the flat
 // vector storage used internally by Index.
 //
 // The public API accepts [][]float32 because it is convenient for callers, but
@@ -12,7 +12,7 @@ import "fmt"
 // overhead, and makes future persistence a simple count*dim float block. For
 // cosine indexes, this is also where the stored representation is normalized
 // without mutating caller input.
-func flattenVectors(vectors [][]float32, configuredDim int, metric Metric) ([]float32, int, error) {
+func FlattenVectors(vectors [][]float32, configuredDim int, metric Metric) ([]float32, int, error) {
 	dim, err := validateVectors(vectors, configuredDim)
 	if err != nil {
 		return nil, 0, err

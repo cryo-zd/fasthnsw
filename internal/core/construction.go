@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+
+	"github.com/cryo-zd/fasthnsw/internal/eval"
 )
 
 const minApproxKNNGIterations = 4
@@ -301,16 +303,9 @@ func estimateCandidateRecall(candidates [][]candidate, cfg candidateQualityConfi
 	var total int
 	for _, sourceID := range controls {
 		exact := exactCandidatesForNode(vectors, dim, metric, sourceID, minInt(cfg.K, count-1))
-		exactIDs := make(map[int]bool, len(exact))
-		for _, candidate := range exact {
-			exactIDs[candidate.id] = true
-			total++
-		}
-		for i := 0; i < cfg.K && i < len(candidates[sourceID]); i++ {
-			if exactIDs[candidates[sourceID][i].id] {
-				hits++
-			}
-		}
+		sourceHits, sourceTotal := eval.CountHitsAtK(candidateIDs(candidates[sourceID]), candidateIDs(exact), cfg.K)
+		hits += sourceHits
+		total += sourceTotal
 	}
 	if total == 0 {
 		return 1, nil

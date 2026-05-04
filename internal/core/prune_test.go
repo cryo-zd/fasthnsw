@@ -3,13 +3,13 @@ package core
 import "testing"
 
 func TestRNGPruneKeepsCandidatesWhenNoDominance(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{1, 0},
 		{0, 1},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	got, err := rngPrune(0, []candidate{{id: 1}, {id: 2}}, 4, flat, dim, MetricL2)
@@ -21,13 +21,13 @@ func TestRNGPruneKeepsCandidatesWhenNoDominance(t *testing.T) {
 }
 
 func TestRNGPruneRemovesDominatedCollinearCandidate(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{1, 0},
 		{2, 0},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	got, err := rngPrune(0, []candidate{{id: 2}, {id: 1}}, 4, flat, dim, MetricL2)
@@ -39,14 +39,14 @@ func TestRNGPruneRemovesDominatedCollinearCandidate(t *testing.T) {
 }
 
 func TestRNGPruneHonorsMaxDegree(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
 		{-1},
 		{2},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	got, err := rngPrune(0, []candidate{{id: 3}, {id: 2}, {id: 1}}, 1, flat, dim, MetricL2)
@@ -58,13 +58,13 @@ func TestRNGPruneHonorsMaxDegree(t *testing.T) {
 }
 
 func TestPruneNormalizesSelfDuplicatesAndStaleDistances(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
 		{2},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	got, err := rngPrune(0, []candidate{
@@ -81,13 +81,13 @@ func TestPruneNormalizesSelfDuplicatesAndStaleDistances(t *testing.T) {
 }
 
 func TestAlphaPruneCanBeLessAggressiveThanRNG(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{1, 0},
 		{1, 1},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates := []candidate{{id: 1}, {id: 2}}
 
@@ -117,13 +117,13 @@ func TestPruneRejectsOutOfRangeCandidate(t *testing.T) {
 }
 
 func TestAngleUWVGreaterThanAlphaHandlesDegenerateGeometry(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{0, 0},
 		{1, 0},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	if angleUWVGreaterThanAlpha(0, 1, 2, flat, dim, -0.5) {

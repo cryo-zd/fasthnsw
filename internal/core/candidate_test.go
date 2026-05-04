@@ -1,16 +1,20 @@
 package core
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/cryo-zd/fasthnsw/internal/eval"
+)
 
 func TestExactCandidates(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{1, 0},
 		{3, 0},
 		{0, 2},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	got, err := exactCandidates(flat, dim, MetricL2, 2)
@@ -28,13 +32,13 @@ func TestExactCandidates(t *testing.T) {
 }
 
 func TestExactCandidatesExcludesSelfAndTruncatesK(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
 		{2},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	got, err := exactCandidates(flat, dim, MetricL2, 10)
@@ -57,13 +61,13 @@ func TestExactCandidatesExcludesSelfAndTruncatesK(t *testing.T) {
 }
 
 func TestExactCandidatesTieBreaksByID(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{-1},
 		{1},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	got, err := exactCandidates(flat, dim, MetricL2, 2)
@@ -87,9 +91,9 @@ func TestExactCandidatesEmptyAndSingleVector(t *testing.T) {
 		t.Fatalf("len(empty candidates) = %d, want 0", len(got))
 	}
 
-	flat, dim, err := flattenVectors([][]float32{{1, 2}}, 0, MetricL2)
+	flat, dim, err := FlattenVectors([][]float32{{1, 2}}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	got, err = exactCandidates(flat, dim, MetricL2, 3)
 	if err != nil {
@@ -122,13 +126,13 @@ func TestExactCandidatesRejectsInvalidInput(t *testing.T) {
 }
 
 func TestExactCandidatesCosineUsesNormalizedVectors(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{10, 0},
 		{1, 0},
 		{0, 1},
 	}, 0, MetricCosine)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	got, err := exactCandidates(flat, dim, MetricCosine, 2)
@@ -144,9 +148,9 @@ func TestExactCandidatesCosineUsesNormalizedVectors(t *testing.T) {
 }
 
 func TestApproximateKNNGCandidatesAreBoundedSortedAndDeterministic(t *testing.T) {
-	flat, dim, err := flattenVectors(lineVectors(64), 0, MetricL2)
+	flat, dim, err := FlattenVectors(lineVectors(64), 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	left, err := approximateKNNGCandidates(flat, dim, MetricL2, 6, 42, 4)
@@ -175,9 +179,9 @@ func TestApproximateKNNGCandidatesAreBoundedSortedAndDeterministic(t *testing.T)
 }
 
 func TestApproximateKNNGCandidatesRecallAgainstExact(t *testing.T) {
-	flat, dim, err := flattenVectors(lineVectors(80), 0, MetricL2)
+	flat, dim, err := FlattenVectors(lineVectors(80), 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	approx, err := approximateKNNGCandidates(flat, dim, MetricL2, 8, 7, 6)
 	if err != nil {
@@ -227,16 +231,9 @@ func candidateRecall(got [][]candidate, want [][]candidate, k int) float64 {
 	var hits int
 	var total int
 	for sourceID := range want {
-		wantIDs := make(map[int]bool, k)
-		for i := 0; i < k && i < len(want[sourceID]); i++ {
-			wantIDs[want[sourceID][i].id] = true
-			total++
-		}
-		for i := 0; i < k && i < len(got[sourceID]); i++ {
-			if wantIDs[got[sourceID][i].id] {
-				hits++
-			}
-		}
+		sourceHits, sourceTotal := eval.CountHitsAtK(candidateIDs(got[sourceID]), candidateIDs(want[sourceID]), k)
+		hits += sourceHits
+		total += sourceTotal
 	}
 	if total == 0 {
 		return 1

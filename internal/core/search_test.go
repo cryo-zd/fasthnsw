@@ -18,9 +18,9 @@ func TestSearchCompleteGraphMatchesExactTopK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search returned error: %v", err)
 	}
-	want, err := exactTopK(idx.vectors, idx.dim, idx.cfg.Metric, []float32{0.1, 0}, 2)
+	want, err := ExactTopK(idx.vectors, idx.dim, idx.cfg.Metric, []float32{0.1, 0}, 2)
 	if err != nil {
-		t.Fatalf("exactTopK returned error: %v", err)
+		t.Fatalf("ExactTopK returned error: %v", err)
 	}
 	assertResults(t, got, want)
 }
