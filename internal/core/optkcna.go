@@ -39,8 +39,10 @@ func optKCNA(candidates [][]candidate, cfg optKCNAConfig, vectors []float32, dim
 	}
 
 	refreshed := make([][]candidate, count)
+	var scratch graphSearchScratch
+	scratch.reserve(count, cfg.SearchEf)
 	for sourceID := 0; sourceID < count; sourceID++ {
-		results := graphSearchLayer(alphaGraph, vectors, dim, metric, []int{sourceID}, vectorAt(vectors, dim, sourceID), cfg.SearchEf)
+		results := graphSearchLayer(alphaGraph, vectors, dim, metric, sourceID, vectorAt(vectors, dim, sourceID), cfg.SearchEf, &scratch)
 		refreshed[sourceID] = candidatesFromResults(sourceID, results, cfg.CandidateK)
 	}
 	return refreshed, nil
