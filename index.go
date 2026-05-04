@@ -102,8 +102,7 @@ func (idx *Index) Search(query []float32, k int, efSearch int) ([]Result, error)
 	return idx.search(preparedQuery, k, efSearch)
 }
 
-// Save will write a versioned binary index format in a later implementation
-// phase.
+// Save writes a versioned binary representation of the built index.
 func (idx *Index) Save(w io.Writer) error {
 	if idx == nil {
 		return fmt.Errorf("fasthnsw: nil index")
@@ -111,16 +110,15 @@ func (idx *Index) Save(w io.Writer) error {
 	if w == nil {
 		return fmt.Errorf("fasthnsw: nil writer")
 	}
-	return fmt.Errorf("%w: Save persistence is not available yet", ErrNotImplemented)
+	return idx.save(w)
 }
 
-// Load will read a versioned binary index format in a later implementation
-// phase.
+// Load reads a versioned binary index representation written by Save.
 func Load(r io.Reader) (*Index, error) {
 	if r == nil {
 		return nil, fmt.Errorf("fasthnsw: nil reader")
 	}
-	return nil, fmt.Errorf("%w: Load persistence is not available yet", ErrNotImplemented)
+	return loadIndex(r)
 }
 
 // validateVectors checks the public dataset shape and returns its dimension.
