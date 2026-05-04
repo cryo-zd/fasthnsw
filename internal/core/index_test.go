@@ -6,6 +6,8 @@ import (
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/cryo-zd/fasthnsw/internal/synth"
 )
 
 func TestBuildStoresVectorsAndConstructsGraph(t *testing.T) {
@@ -216,7 +218,7 @@ func TestSaveLoadRoundTripL2(t *testing.T) {
 		CandidateRecall:   0.90,
 		CandidateControls: 12,
 	}
-	idx := mustBuildIndex(t, cfg, deterministicVectors(40, 3))
+	idx := mustBuildIndex(t, cfg, synth.UniformVectors(40, 3))
 	query := []float32{1.25, 2.5, 3.75}
 
 	before, err := idx.Search(query, 5, 18)

@@ -252,11 +252,3 @@ func sameIDSet(left map[int]struct{}, right map[int]struct{}) bool {
 	}
 	return true
 }
-
-func lineVectors(count int) [][]float32 {
-	vectors := make([][]float32, count)
-	for id := 0; id < count; id++ {
-		vectors[id] = []float32{float32(id)}
-	}
-	return vectors
-}
