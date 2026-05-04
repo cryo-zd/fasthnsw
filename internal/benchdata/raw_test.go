@@ -3,7 +3,6 @@ package benchdata
 import (
 	"bytes"
 	"encoding/binary"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -108,11 +107,47 @@ func TestLoadSyntheticDataset(t *testing.T) {
 	}
 }
 
-func TestRecallAtK(t *testing.T) {
-	got := []fasthnsw.Result{{ID: 1}, {ID: 2}, {ID: 3}}
-	truth := []int{2, 4, 1}
-	if recall := RecallAtK(got, truth, 3); math.Abs(recall-float64(2)/3) > 1e-12 {
-		t.Fatalf("RecallAtK = %v, want %v", recall, float64(2)/3)
+func TestExactGroundTruthL2TieBreaksByID(t *testing.T) {
+	got, err := ExactGroundTruth(
+		[][]float32{{1, 0}, {-1, 0}, {0, 1}},
+		[][]float32{{0, 0}},
+		fasthnsw.MetricL2,
+		3,
+	)
+	if err != nil {
+		t.Fatalf("ExactGroundTruth returned error: %v", err)
+	}
+	want := [][]int{{0, 1, 2}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExactGroundTruth = %v, want %v", got, want)
+	}
+}
+
+func TestExactGroundTruthCosineNormalizesThroughCore(t *testing.T) {
+	got, err := ExactGroundTruth(
+		[][]float32{{10, 0}, {0, 3}, {-2, 0}},
+		[][]float32{{5, 0}},
+		fasthnsw.MetricCosine,
+		2,
+	)
+	if err != nil {
+		t.Fatalf("ExactGroundTruth returned error: %v", err)
+	}
+	want := [][]int{{0, 1}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExactGroundTruth = %v, want %v", got, want)
+	}
+}
+
+func TestExactGroundTruthRejectsCosineZeroVector(t *testing.T) {
+	_, err := ExactGroundTruth(
+		[][]float32{{1, 0}, {0, 1}},
+		[][]float32{{0, 0}},
+		fasthnsw.MetricCosine,
+		1,
+	)
+	if err == nil || !strings.Contains(err.Error(), "query 0") {
+		t.Fatalf("ExactGroundTruth error = %v, want query zero-vector error", err)
 	}
 }
 

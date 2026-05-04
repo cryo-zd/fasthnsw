@@ -229,18 +229,12 @@ func mixSeed(seed int64, values ...int64) int64 {
 // betterCandidate reports whether a should sort before b in candidate order.
 // Candidate order is deterministic: distance ascending, then smaller id.
 func betterCandidate(a, b candidate) bool {
-	if a.distance != b.distance {
-		return a.distance < b.distance
-	}
-	return a.id < b.id
+	return compareDistanceID(a.distance, a.id, b.distance, b.id) < 0
 }
 
 // worseCandidate reports whether a should sort after b in candidate order.
 func worseCandidate(a, b candidate) bool {
-	if a.distance != b.distance {
-		return a.distance > b.distance
-	}
-	return a.id > b.id
+	return compareDistanceID(a.distance, a.id, b.distance, b.id) > 0
 }
 
 // candidateMaxHeap keeps the current worst retained candidate at the root so

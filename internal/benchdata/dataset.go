@@ -2,11 +2,12 @@ package benchdata
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"time"
 
 	"github.com/cryo-zd/fasthnsw"
+	"github.com/cryo-zd/fasthnsw/internal/core"
+	"github.com/cryo-zd/fasthnsw/internal/eval"
 )
 
 // Dataset is an in-memory benchmark dataset. It is intentionally internal so
@@ -147,7 +148,7 @@ func RunValidation(dataset Dataset, cfg fasthnsw.Config, k int, efSearch int, sa
 		if err != nil {
 			return ValidationResult{}, fmt.Errorf("query %d: %w", queryID, err)
 		}
-		recallTotal += RecallAtK(results, dataset.GroundTruth[queryID], k)
+		recallTotal += eval.RecallAtK(core.ResultIDs(results, k), dataset.GroundTruth[queryID], k)
 	}
 	queryTime := time.Since(searchStart)
 
@@ -163,29 +164,6 @@ func RunValidation(dataset Dataset, cfg fasthnsw.Config, k int, efSearch int, sa
 	}, nil
 }
 
-// RecallAtK returns the fraction of the true top-k neighbor ids found in got.
-func RecallAtK(got []fasthnsw.Result, truth []int, k int) float64 {
-	if k == 0 {
-		return 1
-	}
-	truthIDs := make(map[int]bool, k)
-	for i := 0; i < k && i < len(truth); i++ {
-		truthIDs[truth[i]] = true
-	}
-
-	var hits int
-	limit := k
-	if limit > len(got) {
-		limit = len(got)
-	}
-	for i := 0; i < limit; i++ {
-		if truthIDs[got[i].ID] {
-			hits++
-		}
-	}
-	return float64(hits) / float64(k)
-}
-
 // ExactGroundTruth computes deterministic exact nearest-neighbor ids for
 // generated validation datasets that do not ship precomputed ground truth.
 func ExactGroundTruth(base [][]float32, queries [][]float32, metric fasthnsw.Metric, k int) ([][]int, error) {
@@ -198,106 +176,22 @@ func ExactGroundTruth(base [][]float32, queries [][]float32, metric fasthnsw.Met
 	if k > len(base) {
 		k = len(base)
 	}
-	preparedBase, err := prepareVectors(base, metric)
-	if err != nil {
-		return nil, err
-	}
-	preparedQueries, err := prepareVectors(queries, metric)
+	flatBase, dim, err := core.FlattenVectors(base, 0, metric)
 	if err != nil {
 		return nil, err
 	}
 
-	truth := make([][]int, len(preparedQueries))
-	for queryID, query := range preparedQueries {
-		candidates := make([]neighbor, 0, len(preparedBase))
-		for id, vector := range preparedBase {
-			candidates = append(candidates, neighbor{
-				id:       id,
-				distance: distance(metric, vector, query),
-			})
+	truth := make([][]int, len(queries))
+	for queryID, query := range queries {
+		results, err := core.ExactTopK(flatBase, dim, metric, query, k)
+		if err != nil {
+			return nil, fmt.Errorf("query %d: %w", queryID, err)
 		}
-		sortNeighbors(candidates)
-		ids := make([]int, k)
-		for i := 0; i < k; i++ {
-			ids[i] = candidates[i].id
+		ids := make([]int, len(results))
+		for i, result := range results {
+			ids[i] = result.ID
 		}
 		truth[queryID] = ids
 	}
 	return truth, nil
-}
-
-type neighbor struct {
-	id       int
-	distance float32
-}
-
-func sortNeighbors(neighbors []neighbor) {
-	for i := 1; i < len(neighbors); i++ {
-		current := neighbors[i]
-		j := i - 1
-		for j >= 0 && worseNeighbor(neighbors[j], current) {
-			neighbors[j+1] = neighbors[j]
-			j--
-		}
-		neighbors[j+1] = current
-	}
-}
-
-func worseNeighbor(left neighbor, right neighbor) bool {
-	if left.distance != right.distance {
-		return left.distance > right.distance
-	}
-	return left.id > right.id
-}
-
-func prepareVectors(vectors [][]float32, metric fasthnsw.Metric) ([][]float32, error) {
-	if metric != fasthnsw.MetricCosine {
-		return vectors, nil
-	}
-	out := make([][]float32, len(vectors))
-	for i, vector := range vectors {
-		normalized, err := normalize(vector)
-		if err != nil {
-			return nil, fmt.Errorf("vector %d: %w", i, err)
-		}
-		out[i] = normalized
-	}
-	return out, nil
-}
-
-func normalize(vector []float32) ([]float32, error) {
-	var normSquared float64
-	for _, value := range vector {
-		v := float64(value)
-		normSquared += v * v
-	}
-	if normSquared == 0 {
-		return nil, fmt.Errorf("cosine vectors must not be zero vectors")
-	}
-	inv := float32(1 / math.Sqrt(normSquared))
-	out := make([]float32, len(vector))
-	for i, value := range vector {
-		out[i] = value * inv
-	}
-	return out, nil
-}
-
-func distance(metric fasthnsw.Metric, left []float32, right []float32) float32 {
-	switch metric {
-	case fasthnsw.MetricL2:
-		var sum float32
-		for i := range left {
-			d := left[i] - right[i]
-			sum += d * d
-		}
-		return sum
-	case fasthnsw.MetricCosine:
-		var dot float32
-		for i := range left {
-			dot += left[i] * right[i]
-		}
-		return 1 - dot
-	default:
-		panic("unsupported metric reached benchmark distance")
-	}
 }

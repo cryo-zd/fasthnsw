@@ -5,10 +5,10 @@ import (
 	"fmt"
 )
 
-// exactTopK scans every stored vector and returns the exact nearest neighbors.
+// ExactTopK scans every stored vector and returns the exact nearest neighbors.
 // It is an internal correctness oracle for tests, recall checks, and future
 // benchmarks; the public Search API should use graph search once implemented.
-func exactTopK(vectors []float32, dim int, metric Metric, query []float32, k int) ([]Result, error) {
+func ExactTopK(vectors []float32, dim int, metric Metric, query []float32, k int) ([]Result, error) {
 	if dim <= 0 {
 		return nil, fmt.Errorf("fasthnsw: vector dimension must be positive")
 	}

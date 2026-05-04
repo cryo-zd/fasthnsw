@@ -3,13 +3,13 @@ package core
 import "testing"
 
 func TestOptKCNARefreshesCandidatesThroughGraphSearch(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
 		{2},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates := [][]candidate{
 		{{id: 1}},
@@ -34,13 +34,13 @@ func TestOptKCNARefreshesCandidatesThroughGraphSearch(t *testing.T) {
 }
 
 func TestOptKCNAOutputsSortedCandidatesWithoutSelf(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{1, 0},
 		{0, 1},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates, err := exactCandidates(flat, dim, MetricL2, 2)
 	if err != nil {
@@ -73,14 +73,14 @@ func TestOptKCNAOutputsSortedCandidatesWithoutSelf(t *testing.T) {
 }
 
 func TestConnectWeakComponentsInPlaceAddsDeterministicBridge(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
 		{10},
 		{11},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	adjacency := [][]int{
 		{1},
@@ -100,13 +100,13 @@ func TestConnectWeakComponentsInPlaceAddsDeterministicBridge(t *testing.T) {
 }
 
 func TestConnectWeakComponentsInPlaceMutatesAdjacency(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
 		{10},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	adjacency := [][]int{
 		{1},
@@ -121,14 +121,14 @@ func TestConnectWeakComponentsInPlaceMutatesAdjacency(t *testing.T) {
 }
 
 func TestOptKCNAConnectivityRepairCanReachOtherComponent(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
 		{10},
 		{11},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates := [][]candidate{
 		{{id: 1}},
@@ -156,9 +156,9 @@ func TestOptKCNAConnectivityRepairCanReachOtherComponent(t *testing.T) {
 }
 
 func TestOptKCNAPreservesOrImprovesCandidateRecall(t *testing.T) {
-	flat, dim, err := flattenVectors(lineVectors(48), 0, MetricL2)
+	flat, dim, err := FlattenVectors(lineVectors(48), 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	initial, err := approximateKNNGCandidates(flat, dim, MetricL2, 4, 5, 2)
 	if err != nil {

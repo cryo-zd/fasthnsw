@@ -24,9 +24,9 @@ func TestBuildSearchesTinyCompleteLayer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search returned error: %v", err)
 	}
-	want, err := exactTopK(idx.vectors, idx.dim, idx.cfg.Metric, []float32{0.1, 0}, 2)
+	want, err := ExactTopK(idx.vectors, idx.dim, idx.cfg.Metric, []float32{0.1, 0}, 2)
 	if err != nil {
-		t.Fatalf("exactTopK returned error: %v", err)
+		t.Fatalf("ExactTopK returned error: %v", err)
 	}
 	assertResults(t, got, want)
 }
@@ -59,9 +59,9 @@ func TestBuildSearchesCosineIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search returned error: %v", err)
 	}
-	want, err := exactTopK(idx.vectors, idx.dim, idx.cfg.Metric, []float32{1, 0}, 2)
+	want, err := ExactTopK(idx.vectors, idx.dim, idx.cfg.Metric, []float32{1, 0}, 2)
 	if err != nil {
-		t.Fatalf("exactTopK returned error: %v", err)
+		t.Fatalf("ExactTopK returned error: %v", err)
 	}
 	assertResults(t, got, want)
 }
@@ -83,9 +83,9 @@ func TestBuildUsesDoubleDegreeOnBaseLayer(t *testing.T) {
 }
 
 func TestBuildHNSWLayerCompletesWhenDegreeEqualsBound(t *testing.T) {
-	flat, dim, err := flattenVectors(lineVectors(3), 0, MetricL2)
+	flat, dim, err := FlattenVectors(lineVectors(3), 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
 	got, err := buildHNSWLayer(1, []int{0, 1, 2}, 3, flat, dim, Config{Metric: MetricL2}, 2)
@@ -120,13 +120,13 @@ func TestFastHNSWOptKCNAConfigDisablesConnectivityRepair(t *testing.T) {
 }
 
 func TestFinalHNSWLayerUsesRNGPruning(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{1, 0},
 		{1, 1},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates := [][]candidate{
 		{{id: 1}, {id: 2}},
@@ -177,9 +177,9 @@ func TestAssignLevelsUsesSeed(t *testing.T) {
 }
 
 func TestRefineCandidatesStopsWhenQualityRequirementIsMet(t *testing.T) {
-	flat, dim, err := flattenVectors(lineVectors(32), 0, MetricL2)
+	flat, dim, err := FlattenVectors(lineVectors(32), 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates, err := exactCandidates(flat, dim, MetricL2, 4)
 	if err != nil {
@@ -211,9 +211,9 @@ func TestRefineCandidatesStopsWhenQualityRequirementIsMet(t *testing.T) {
 }
 
 func TestRefineCandidatesUsesIterationsAsMaximumCap(t *testing.T) {
-	flat, dim, err := flattenVectors(lineVectors(48), 0, MetricL2)
+	flat, dim, err := FlattenVectors(lineVectors(48), 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates := make([][]candidate, len(flat)/dim)
 
@@ -238,9 +238,9 @@ func TestRefineCandidatesUsesIterationsAsMaximumCap(t *testing.T) {
 }
 
 func TestAcquireCandidatesByGraphSearchDropsSelfAndKeepsNearest(t *testing.T) {
-	flat, dim, err := flattenVectors(lineVectors(5), 0, MetricL2)
+	flat, dim, err := FlattenVectors(lineVectors(5), 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	adjacency := completeLayer(5)
 
@@ -252,9 +252,9 @@ func TestAcquireCandidatesByGraphSearchDropsSelfAndKeepsNearest(t *testing.T) {
 }
 
 func TestEstimateCandidateRecallUsesFixedControls(t *testing.T) {
-	flat, dim, err := flattenVectors(lineVectors(20), 0, MetricL2)
+	flat, dim, err := FlattenVectors(lineVectors(20), 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates, err := exactCandidates(flat, dim, MetricL2, 4)
 	if err != nil {

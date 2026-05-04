@@ -3,9 +3,9 @@ package core
 import "testing"
 
 func TestFlattenVectorsL2(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{{1, 2}, {3, 4}}, 0, MetricL2)
+	flat, dim, err := FlattenVectors([][]float32{{1, 2}, {3, 4}}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	if dim != 2 {
 		t.Fatalf("dim = %d, want 2", dim)
@@ -19,9 +19,9 @@ func TestFlattenVectorsL2(t *testing.T) {
 }
 
 func TestFlattenVectorsCosineNormalizes(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{{3, 4}}, 0, MetricCosine)
+	flat, dim, err := FlattenVectors([][]float32{{3, 4}}, 0, MetricCosine)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	if dim != 2 {
 		t.Fatalf("dim = %d, want 2", dim)
@@ -32,15 +32,15 @@ func TestFlattenVectorsCosineNormalizes(t *testing.T) {
 }
 
 func TestFlattenVectorsRejectsCosineZeroVector(t *testing.T) {
-	_, _, err := flattenVectors([][]float32{{1, 0}, {0, 0}}, 0, MetricCosine)
+	_, _, err := FlattenVectors([][]float32{{1, 0}, {0, 0}}, 0, MetricCosine)
 	if err == nil {
-		t.Fatal("flattenVectors returned nil error")
+		t.Fatal("FlattenVectors returned nil error")
 	}
 }
 
 func TestFlattenVectorsRejectsDimensionMismatch(t *testing.T) {
-	_, _, err := flattenVectors([][]float32{{1, 2}, {3}}, 0, MetricL2)
+	_, _, err := FlattenVectors([][]float32{{1, 2}, {3}}, 0, MetricL2)
 	if err == nil {
-		t.Fatal("flattenVectors returned nil error")
+		t.Fatal("FlattenVectors returned nil error")
 	}
 }

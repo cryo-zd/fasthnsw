@@ -3,18 +3,9 @@ package core
 import (
 	"testing"
 
+	"github.com/cryo-zd/fasthnsw/internal/eval"
 	"github.com/cryo-zd/fasthnsw/internal/synth"
 )
-
-func TestRecallAtK(t *testing.T) {
-	got := []Result{{ID: 1}, {ID: 2}, {ID: 3}}
-	want := []Result{{ID: 2}, {ID: 4}, {ID: 1}}
-
-	recall := recallAtK(got, want, 3)
-	if recall != float64(2)/3 {
-		t.Fatalf("recallAtK = %v, want %v", recall, float64(2)/3)
-	}
-}
 
 func TestGeneratedDatasetsAreDeterministic(t *testing.T) {
 	if !synth.SameVectors(synth.UniformVectors(16, 3), synth.UniformVectors(16, 3)) {
@@ -95,33 +86,11 @@ func averageRecallAtK(t *testing.T, idx *Index, queries [][]float32, k int, efSe
 		if err != nil {
 			t.Fatalf("Search returned error: %v", err)
 		}
-		want, err := exactTopK(idx.vectors, idx.dim, idx.cfg.Metric, query, k)
+		want, err := ExactTopK(idx.vectors, idx.dim, idx.cfg.Metric, query, k)
 		if err != nil {
-			t.Fatalf("exactTopK returned error: %v", err)
+			t.Fatalf("ExactTopK returned error: %v", err)
 		}
-		total += recallAtK(got, want, k)
+		total += eval.RecallAtK(ResultIDs(got, k), ResultIDs(want, k), k)
 	}
 	return total / float64(len(queries))
-}
-
-func recallAtK(got []Result, want []Result, k int) float64 {
-	wantIDs := make(map[int]bool, k)
-	for i := 0; i < k && i < len(want); i++ {
-		wantIDs[want[i].ID] = true
-	}
-
-	var hits int
-	limit := k
-	if limit > len(got) {
-		limit = len(got)
-	}
-	for i := 0; i < limit; i++ {
-		if wantIDs[got[i].ID] {
-			hits++
-		}
-	}
-	if k == 0 {
-		return 1
-	}
-	return float64(hits) / float64(k)
 }

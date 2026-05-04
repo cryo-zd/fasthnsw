@@ -43,7 +43,7 @@ func (idx *Index) Build(vectors [][]float32) error {
 	if idx == nil {
 		return fmt.Errorf("fasthnsw: nil index")
 	}
-	flat, dim, err := flattenVectors(vectors, idx.cfg.Dim, idx.cfg.Metric)
+	flat, dim, err := FlattenVectors(vectors, idx.cfg.Dim, idx.cfg.Metric)
 	if err != nil {
 		return err
 	}

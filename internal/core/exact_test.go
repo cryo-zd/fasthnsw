@@ -9,9 +9,9 @@ func TestExactTopKL2(t *testing.T) {
 		1, 0,
 	}
 
-	got, err := exactTopK(vectors, 2, MetricL2, []float32{0.9, 0}, 2)
+	got, err := ExactTopK(vectors, 2, MetricL2, []float32{0.9, 0}, 2)
 	if err != nil {
-		t.Fatalf("exactTopK returned error: %v", err)
+		t.Fatalf("ExactTopK returned error: %v", err)
 	}
 
 	want := []Result{
@@ -27,9 +27,9 @@ func TestExactTopKTieBreaksByID(t *testing.T) {
 		-1, 0,
 	}
 
-	got, err := exactTopK(vectors, 2, MetricL2, []float32{0, 0}, 2)
+	got, err := ExactTopK(vectors, 2, MetricL2, []float32{0, 0}, 2)
 	if err != nil {
-		t.Fatalf("exactTopK returned error: %v", err)
+		t.Fatalf("ExactTopK returned error: %v", err)
 	}
 
 	want := []Result{
@@ -40,14 +40,14 @@ func TestExactTopKTieBreaksByID(t *testing.T) {
 }
 
 func TestExactTopKCosineNormalizesQuery(t *testing.T) {
-	vectors, dim, err := flattenVectors([][]float32{{1, 0}, {0, 1}}, 0, MetricCosine)
+	vectors, dim, err := FlattenVectors([][]float32{{1, 0}, {0, 1}}, 0, MetricCosine)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
-	got, err := exactTopK(vectors, dim, MetricCosine, []float32{10, 0}, 2)
+	got, err := ExactTopK(vectors, dim, MetricCosine, []float32{10, 0}, 2)
 	if err != nil {
-		t.Fatalf("exactTopK returned error: %v", err)
+		t.Fatalf("ExactTopK returned error: %v", err)
 	}
 
 	want := []Result{
@@ -73,8 +73,8 @@ func TestExactTopKRejectsInvalidInput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := exactTopK(tt.vectors, tt.dim, MetricL2, tt.query, tt.k); err == nil {
-				t.Fatal("exactTopK returned nil error")
+			if _, err := ExactTopK(tt.vectors, tt.dim, MetricL2, tt.query, tt.k); err == nil {
+				t.Fatal("ExactTopK returned nil error")
 			}
 		})
 	}

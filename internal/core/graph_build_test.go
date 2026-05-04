@@ -3,13 +3,13 @@ package core
 import "testing"
 
 func TestBuildPrunedLayerFromExactCandidates(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{1, 0},
 		{0, 1},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates, err := exactCandidates(flat, dim, MetricL2, 2)
 	if err != nil {
@@ -29,13 +29,13 @@ func TestBuildPrunedLayerFromExactCandidates(t *testing.T) {
 }
 
 func TestBuildPrunedLayerAddsReverseEdges(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
 		{10},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates := [][]candidate{
 		{{id: 1}},
@@ -56,13 +56,13 @@ func TestBuildPrunedLayerAddsReverseEdges(t *testing.T) {
 }
 
 func TestBuildPrunedLayerNormalizesSelfAndDuplicates(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
 		{2},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates := [][]candidate{
 		{{id: 0}, {id: 1}, {id: 1}, {id: 2}},
@@ -89,14 +89,14 @@ func TestBuildPrunedLayerNormalizesSelfAndDuplicates(t *testing.T) {
 }
 
 func TestBuildPrunedLayerEnforcesMaxDegreeAfterReverseMerge(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{1, 0},
 		{-1, 0},
 		{0, 1},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates := [][]candidate{
 		nil,
@@ -117,13 +117,13 @@ func TestBuildPrunedLayerEnforcesMaxDegreeAfterReverseMerge(t *testing.T) {
 }
 
 func TestBuildPrunedLayerAlphaModeCanRetainRNGPrunedEdge(t *testing.T) {
-	flat, dim, err := flattenVectors([][]float32{
+	flat, dim, err := FlattenVectors([][]float32{
 		{0, 0},
 		{1, 0},
 		{1, 1},
 	}, 0, MetricL2)
 	if err != nil {
-		t.Fatalf("flattenVectors returned error: %v", err)
+		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 	candidates := [][]candidate{
 		{{id: 1}, {id: 2}},
