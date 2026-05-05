@@ -7,10 +7,13 @@ import (
 
 // optKCNAConfig controls one OptKCNA candidate-refresh step.
 type optKCNAConfig struct {
-	CandidateK        int
-	SearchEf          int
-	MaxDegree         int
-	AlphaDegrees      float64
+	CandidateK   int
+	SearchEf     int
+	MaxDegree    int
+	AlphaDegrees float64
+	// ConnectComponents enables NSG-style connectivity enhancement on the
+	// temporary alpha-pruned graph used for candidate refresh. FastHNSW leaves
+	// this disabled to match the HNSW/RNG construction described in Section 5.3.
 	ConnectComponents bool
 	Workers           int
 }

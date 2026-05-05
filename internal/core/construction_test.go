@@ -152,6 +152,36 @@ func TestFinalHNSWLayerUsesRNGPruning(t *testing.T) {
 	assertAdjacency(t, [][]int{alphaLayer[0]}, [][]int{{1, 2}})
 }
 
+func TestFinalHNSWLayerDoesNotRepairWeakComponents(t *testing.T) {
+	flat, dim, err := FlattenVectors([][]float32{
+		{0},
+		{1},
+		{10},
+		{11},
+	}, 0, MetricL2)
+	if err != nil {
+		t.Fatalf("FlattenVectors returned error: %v", err)
+	}
+	candidates := [][]candidate{
+		{{id: 1}},
+		{{id: 0}},
+		{{id: 3}},
+		{{id: 2}},
+	}
+
+	got, err := buildFinalHNSWLayer(candidates, 2, flat, dim, MetricL2, 1)
+	if err != nil {
+		t.Fatalf("buildFinalHNSWLayer returned error: %v", err)
+	}
+
+	assertAdjacency(t, got, [][]int{
+		{1},
+		{0},
+		{3},
+		{2},
+	})
+}
+
 func TestBuildIsDeterministicWithFixedSeed(t *testing.T) {
 	vectors := synth.UniformVectors(48, 3)
 	cfg := Config{Dim: 3, M: 4, K0: 8, EfConstruction: 8, Iterations: 1, Seed: 17}
