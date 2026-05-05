@@ -101,7 +101,7 @@ func TestBuildHNSWLayerCompletesWhenDegreeEqualsBound(t *testing.T) {
 	}
 }
 
-func TestFastHNSWOptKCNAConfigDisablesConnectivityRepair(t *testing.T) {
+func TestFastHNSWOptKCNAConfigCopiesRefreshParameters(t *testing.T) {
 	cfg := fastHNSWOptKCNAConfig(Config{Alpha: 90}, 12, 24, 6)
 
 	if cfg.CandidateK != 12 {
@@ -115,9 +115,6 @@ func TestFastHNSWOptKCNAConfigDisablesConnectivityRepair(t *testing.T) {
 	}
 	if cfg.AlphaDegrees != 90 {
 		t.Fatalf("AlphaDegrees = %v, want 90", cfg.AlphaDegrees)
-	}
-	if cfg.ConnectComponents {
-		t.Fatal("ConnectComponents = true, want false for FastHNSW/HNSW construction")
 	}
 	if cfg.Workers != 0 {
 		t.Fatalf("Workers = %d, want copied from zero config", cfg.Workers)
@@ -150,6 +147,36 @@ func TestFinalHNSWLayerUsesRNGPruning(t *testing.T) {
 
 	assertAdjacency(t, [][]int{finalLayer[0]}, [][]int{{1}})
 	assertAdjacency(t, [][]int{alphaLayer[0]}, [][]int{{1, 2}})
+}
+
+func TestFinalHNSWLayerDoesNotRepairWeakComponents(t *testing.T) {
+	flat, dim, err := FlattenVectors([][]float32{
+		{0},
+		{1},
+		{10},
+		{11},
+	}, 0, MetricL2)
+	if err != nil {
+		t.Fatalf("FlattenVectors returned error: %v", err)
+	}
+	candidates := [][]candidate{
+		{{id: 1}},
+		{{id: 0}},
+		{{id: 3}},
+		{{id: 2}},
+	}
+
+	got, err := buildFinalHNSWLayer(candidates, 2, flat, dim, MetricL2, 1)
+	if err != nil {
+		t.Fatalf("buildFinalHNSWLayer returned error: %v", err)
+	}
+
+	assertAdjacency(t, got, [][]int{
+		{1},
+		{0},
+		{3},
+		{2},
+	})
 }
 
 func TestBuildIsDeterministicWithFixedSeed(t *testing.T) {
@@ -234,11 +261,10 @@ func TestRefineCandidatesStopsWhenQualityRequirementIsMet(t *testing.T) {
 	}
 
 	got, stats, err := refineCandidatesUntilRecall(candidates, optKCNAConfig{
-		CandidateK:        4,
-		SearchEf:          6,
-		MaxDegree:         4,
-		AlphaDegrees:      90,
-		ConnectComponents: true,
+		CandidateK:   4,
+		SearchEf:     6,
+		MaxDegree:    4,
+		AlphaDegrees: 90,
 	}, candidateQualityConfig{
 		TargetRecall: 0.98,
 		Controls:     16,
@@ -265,11 +291,10 @@ func TestRefineCandidatesUsesIterationsAsMaximumCap(t *testing.T) {
 	candidates := make([][]candidate, len(flat)/dim)
 
 	_, stats, err := refineCandidatesUntilRecall(candidates, optKCNAConfig{
-		CandidateK:        8,
-		SearchEf:          8,
-		MaxDegree:         4,
-		AlphaDegrees:      90,
-		ConnectComponents: true,
+		CandidateK:   8,
+		SearchEf:     8,
+		MaxDegree:    4,
+		AlphaDegrees: 90,
 	}, candidateQualityConfig{
 		TargetRecall: 1,
 		Controls:     24,
