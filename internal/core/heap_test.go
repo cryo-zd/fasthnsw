@@ -1,9 +1,6 @@
 package core
 
-import (
-	"container/heap"
-	"testing"
-)
+import "testing"
 
 func TestResultMinHeapPopsNearestFirst(t *testing.T) {
 	candidates := resultMinHeap{
@@ -11,7 +8,7 @@ func TestResultMinHeapPopsNearestFirst(t *testing.T) {
 		{ID: 1, Distance: 0.5},
 		{ID: 3, Distance: 0.1},
 	}
-	heap.Init(&candidates)
+	candidates.init()
 
 	want := []Result{
 		{ID: 3, Distance: 0.1},
@@ -19,7 +16,7 @@ func TestResultMinHeapPopsNearestFirst(t *testing.T) {
 		{ID: 2, Distance: 0.5},
 	}
 	for i, expected := range want {
-		got := heap.Pop(&candidates).(Result)
+		got := candidates.pop()
 		if got != expected {
 			t.Fatalf("pop %d = %+v, want %+v", i, got, expected)
 		}
@@ -32,12 +29,51 @@ func TestResultMaxHeapPopsWorstFirst(t *testing.T) {
 		{ID: 2, Distance: 0.5},
 		{ID: 3, Distance: 0.1},
 	}
-	heap.Init(&results)
+	results.init()
 
-	got := heap.Pop(&results).(Result)
+	got := results.pop()
 	want := Result{ID: 2, Distance: 0.5}
 	if got != want {
 		t.Fatalf("first pop = %+v, want worst result %+v", got, want)
+	}
+}
+
+func TestResultMaxHeapReplaceWorstMaintainsOrdering(t *testing.T) {
+	results := resultMaxHeap{
+		{ID: 1, Distance: 0.5},
+		{ID: 2, Distance: 0.5},
+		{ID: 3, Distance: 0.1},
+	}
+	results.init()
+
+	results.replaceWorst(Result{ID: 4, Distance: 0.2})
+
+	got := results.sorted()
+	want := []Result{
+		{ID: 3, Distance: 0.1},
+		{ID: 4, Distance: 0.2},
+		{ID: 1, Distance: 0.5},
+	}
+	assertResults(t, got, want)
+}
+
+func TestResultHeapsPushMaintainOrdering(t *testing.T) {
+	var candidates resultMinHeap
+	var results resultMaxHeap
+	for _, result := range []Result{
+		{ID: 2, Distance: 0.5},
+		{ID: 1, Distance: 0.5},
+		{ID: 3, Distance: 0.1},
+	} {
+		candidates.push(result)
+		results.push(result)
+	}
+
+	if got, want := candidates.pop(), (Result{ID: 3, Distance: 0.1}); got != want {
+		t.Fatalf("min heap pop = %+v, want %+v", got, want)
+	}
+	if got, want := results.pop(), (Result{ID: 2, Distance: 0.5}); got != want {
+		t.Fatalf("max heap pop = %+v, want %+v", got, want)
 	}
 }
 
@@ -47,7 +83,6 @@ func TestResultMaxHeapSortedReturnsPublicOrder(t *testing.T) {
 		{ID: 1, Distance: 0.5},
 		{ID: 3, Distance: 0.1},
 	}
-	heap.Init(&results)
 
 	got := results.sorted()
 	want := []Result{

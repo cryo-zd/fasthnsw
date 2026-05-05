@@ -1,9 +1,6 @@
 package core
 
-import (
-	"container/heap"
-	"fmt"
-)
+import "fmt"
 
 // ExactTopK scans every stored vector and returns the exact nearest neighbors.
 // It is an internal correctness oracle for tests, recall checks, and future
@@ -33,17 +30,17 @@ func ExactTopK(vectors []float32, dim int, metric Metric, query []float32, k int
 	}
 
 	results := make(resultMaxHeap, 0, k)
-	heap.Init(&results)
 	for id := 0; id < count; id++ {
 		result := Result{
 			ID:       id,
 			Distance: distance(metric, vectorAt(vectors, dim, id), query),
 		}
-		if results.Len() < k || betterResult(result, results.worst()) {
-			heap.Push(&results, result)
-			if results.Len() > k {
-				heap.Pop(&results)
-			}
+		if results.Len() < k {
+			results.push(result)
+			continue
+		}
+		if betterResult(result, results.worst()) {
+			results.replaceWorst(result)
 		}
 	}
 	return results.sorted(), nil

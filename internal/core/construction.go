@@ -252,8 +252,10 @@ func candidatesToAdjacency(candidates [][]candidate) [][]int {
 // using its own vector as the query, then keeps the nearest k non-self results.
 func acquireCandidatesByGraphSearch(adjacency [][]int, vectors []float32, dim int, metric Metric, candidateK int, searchEf int) [][]candidate {
 	out := make([][]candidate, len(adjacency))
+	var scratch graphSearchScratch
+	scratch.reserve(len(adjacency), searchEf)
 	for sourceID := range adjacency {
-		results := graphSearchLayer(adjacency, vectors, dim, metric, []int{sourceID}, vectorAt(vectors, dim, sourceID), searchEf)
+		results := graphSearchLayer(adjacency, vectors, dim, metric, sourceID, vectorAt(vectors, dim, sourceID), searchEf, &scratch)
 		out[sourceID] = candidatesFromResults(sourceID, results, candidateK)
 	}
 	return out
