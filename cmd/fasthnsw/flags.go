@@ -25,6 +25,7 @@ type configFlags struct {
 	alpha             float64
 	iterations        int
 	seed              int64
+	workers           int
 	candidateRecall   float64
 	candidateControls int
 }
@@ -41,6 +42,7 @@ func defaultConfigFlags() configFlags {
 		alpha:             cfg.Alpha,
 		iterations:        cfg.Iterations,
 		seed:              cfg.Seed,
+		workers:           cfg.Workers,
 		candidateRecall:   cfg.CandidateRecall,
 		candidateControls: cfg.CandidateControls,
 	}
@@ -56,6 +58,7 @@ func addConfigFlags(fs *flag.FlagSet, cfg *configFlags) {
 	fs.Float64Var(&cfg.alpha, "alpha", cfg.alpha, "alpha-pruning threshold in degrees")
 	fs.IntVar(&cfg.iterations, "iterations", cfg.iterations, "maximum IterNSG refinement iterations")
 	fs.Int64Var(&cfg.seed, "seed", cfg.seed, "deterministic construction seed")
+	fs.IntVar(&cfg.workers, "workers", cfg.workers, "build-time worker count; zero uses the library default")
 	fs.Float64Var(&cfg.candidateRecall, "candidate-recall", cfg.candidateRecall, "IterNSG candidate recall requirement")
 	fs.IntVar(&cfg.candidateControls, "candidate-controls", cfg.candidateControls, "deterministic candidate-quality estimator sample size")
 }
@@ -75,6 +78,7 @@ func (cfg configFlags) config() (fasthnsw.Config, error) {
 		Alpha:             cfg.alpha,
 		Iterations:        cfg.iterations,
 		Seed:              cfg.seed,
+		Workers:           cfg.workers,
 		CandidateRecall:   cfg.candidateRecall,
 		CandidateControls: cfg.candidateControls,
 	}, nil

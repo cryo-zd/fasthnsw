@@ -11,6 +11,17 @@ type graphSearchScratch struct {
 	results    resultMaxHeap
 }
 
+// makeGraphSearchScratches creates one SEARCH-LAYER scratch object per worker.
+// The visited mark table and heaps are mutable, so construction parallelism
+// must never share a scratch object between goroutines.
+func makeGraphSearchScratches(workers int, count int, ef int) []graphSearchScratch {
+	scratches := make([]graphSearchScratch, workers)
+	for i := range scratches {
+		scratches[i].reserve(count, ef)
+	}
+	return scratches
+}
+
 func (scratch *graphSearchScratch) reset(count int, ef int) {
 	scratch.reserve(count, ef)
 	scratch.visitMark++

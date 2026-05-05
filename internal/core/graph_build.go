@@ -32,7 +32,9 @@ func alphaPruneMode(alphaDegrees float64) pruneMode {
 // direction, then prune again so reverse-edge repair does not violate the
 // degree bound. The output shape matches Index.layers[layer]: adjacency[nodeID]
 // is a deterministic list of neighbor ids ordered by candidate distance then id.
-func buildPrunedLayer(candidates [][]candidate, maxDegree int, mode pruneMode, vectors []float32, dim int, metric Metric) ([][]int, error) {
+// Only node-local pruning is parallelized; reverse-edge merging stays serial so
+// append order is independent of worker scheduling.
+func buildPrunedLayer(candidates [][]candidate, maxDegree int, mode pruneMode, vectors []float32, dim int, metric Metric, workers int) ([][]int, error) {
 	count := len(vectors) / dim
 	adjacency := make([][]int, count)
 	if count == 0 {
@@ -40,12 +42,16 @@ func buildPrunedLayer(candidates [][]candidate, maxDegree int, mode pruneMode, v
 	}
 
 	forward := make([][]candidate, count)
-	for sourceID := 0; sourceID < count; sourceID++ {
+	err := parallelForNodes(count, workers, func(_ int, sourceID int) error {
 		pruned, err := applyPruneMode(sourceID, candidates[sourceID], maxDegree, mode, vectors, dim, metric)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		forward[sourceID] = pruned
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	merged := make([][]candidate, count)
@@ -56,12 +62,16 @@ func buildPrunedLayer(candidates [][]candidate, maxDegree int, mode pruneMode, v
 		}
 	}
 
-	for sourceID := 0; sourceID < count; sourceID++ {
+	err = parallelForNodes(count, workers, func(_ int, sourceID int) error {
 		pruned, err := applyPruneMode(sourceID, merged[sourceID], maxDegree, mode, vectors, dim, metric)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		adjacency[sourceID] = candidateIDs(pruned)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return adjacency, nil
 }

@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/cryo-zd/fasthnsw/internal/synth"
@@ -52,7 +53,7 @@ func BenchmarkCandidateAcquisition(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := approximateKNNGCandidates(vectors, dim, MetricL2, 16, int64(i+1), 4); err != nil {
+		if _, err := approximateKNNGCandidates(vectors, dim, MetricL2, 16, int64(i+1), 4, 1); err != nil {
 			b.Fatalf("approximateKNNGCandidates returned error: %v", err)
 		}
 	}
@@ -103,6 +104,37 @@ func BenchmarkBuild(b *testing.B) {
 		if err := idx.Build(vectors); err != nil {
 			b.Fatalf("Build returned error: %v", err)
 		}
+	}
+}
+
+func BenchmarkBuildWorkers(b *testing.B) {
+	vectors := synth.UniformVectors(1024, 16)
+	baseCfg := Config{Dim: 16, M: 12, K0: 24, CandidateK: 24, ConstructionL: 48, Iterations: 2, Seed: 101, CandidateRecall: 0.90, CandidateControls: 128}
+
+	for _, tt := range []struct {
+		name    string
+		workers int
+	}{
+		{name: "workers1", workers: 1},
+		{name: "workers4", workers: 4},
+		{name: "workersDefault", workers: runtime.GOMAXPROCS(0)},
+	} {
+		b.Run(tt.name, func(b *testing.B) {
+			cfg := baseCfg
+			cfg.Workers = tt.workers
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				idx, err := New(cfg)
+				if err != nil {
+					b.Fatalf("New returned error: %v", err)
+				}
+				if err := idx.Build(vectors); err != nil {
+					b.Fatalf("Build returned error: %v", err)
+				}
+			}
+		})
 	}
 }
 

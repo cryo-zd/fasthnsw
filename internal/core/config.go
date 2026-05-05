@@ -52,7 +52,10 @@ type Config struct {
 	Alpha         float64
 	Iterations    int
 	Seed          int64
-	Workers       int
+	// Workers controls build-time node-local parallelism. A zero value uses
+	// runtime.GOMAXPROCS(0); fixed seeds remain deterministic across worker
+	// counts.
+	Workers int
 	// CandidateRecall is the IterNSG candidate-quality requirement. A zero
 	// value uses the package default.
 	CandidateRecall float64

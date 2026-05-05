@@ -12,6 +12,7 @@ type optKCNAConfig struct {
 	MaxDegree         int
 	AlphaDegrees      float64
 	ConnectComponents bool
+	Workers           int
 }
 
 // optKCNA refreshes k-CNA candidates by searching an intermediate alpha-PG.
@@ -30,7 +31,7 @@ func optKCNA(candidates [][]candidate, cfg optKCNAConfig, vectors []float32, dim
 		return [][]candidate{}, nil
 	}
 
-	alphaGraph, err := buildPrunedLayer(candidates, cfg.MaxDegree, alphaPruneMode(cfg.AlphaDegrees), vectors, dim, metric)
+	alphaGraph, err := buildPrunedLayer(candidates, cfg.MaxDegree, alphaPruneMode(cfg.AlphaDegrees), vectors, dim, metric, cfg.Workers)
 	if err != nil {
 		return nil, err
 	}
@@ -39,12 +40,13 @@ func optKCNA(candidates [][]candidate, cfg optKCNAConfig, vectors []float32, dim
 	}
 
 	refreshed := make([][]candidate, count)
-	var scratch graphSearchScratch
-	scratch.reserve(count, cfg.SearchEf)
-	for sourceID := 0; sourceID < count; sourceID++ {
-		results := graphSearchLayer(alphaGraph, vectors, dim, metric, sourceID, vectorAt(vectors, dim, sourceID), cfg.SearchEf, &scratch)
+	workerCount := effectiveWorkerCount(cfg.Workers, count)
+	scratches := makeGraphSearchScratches(workerCount, count, cfg.SearchEf)
+	_ = parallelForNodes(count, cfg.Workers, func(workerID int, sourceID int) error {
+		results := graphSearchLayer(alphaGraph, vectors, dim, metric, sourceID, vectorAt(vectors, dim, sourceID), cfg.SearchEf, &scratches[workerID])
 		refreshed[sourceID] = candidatesFromResults(sourceID, results, cfg.CandidateK)
-	}
+		return nil
+	})
 	return refreshed, nil
 }
 
@@ -60,6 +62,9 @@ func validateOptKCNAInput(candidates [][]candidate, cfg optKCNAConfig, vectors [
 	}
 	if cfg.AlphaDegrees < minAlpha || cfg.AlphaDegrees > maxAlphaDegrees {
 		return 0, fmt.Errorf("fasthnsw: AlphaDegrees must be in [%.0f, %.0f]", float64(minAlpha), float64(maxAlphaDegrees))
+	}
+	if cfg.Workers < 0 {
+		return 0, fmt.Errorf("fasthnsw: Workers must be positive")
 	}
 	if !validMetric(metric) {
 		return 0, fmt.Errorf("fasthnsw: unsupported metric %d", metric)

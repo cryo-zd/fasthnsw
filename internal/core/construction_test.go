@@ -119,6 +119,9 @@ func TestFastHNSWOptKCNAConfigDisablesConnectivityRepair(t *testing.T) {
 	if cfg.ConnectComponents {
 		t.Fatal("ConnectComponents = true, want false for FastHNSW/HNSW construction")
 	}
+	if cfg.Workers != 0 {
+		t.Fatalf("Workers = %d, want copied from zero config", cfg.Workers)
+	}
 }
 
 func TestFinalHNSWLayerUsesRNGPruning(t *testing.T) {
@@ -136,11 +139,11 @@ func TestFinalHNSWLayerUsesRNGPruning(t *testing.T) {
 		nil,
 	}
 
-	finalLayer, err := buildFinalHNSWLayer(candidates, 4, flat, dim, MetricL2)
+	finalLayer, err := buildFinalHNSWLayer(candidates, 4, flat, dim, MetricL2, 1)
 	if err != nil {
 		t.Fatalf("buildFinalHNSWLayer returned error: %v", err)
 	}
-	alphaLayer, err := buildPrunedLayer(candidates, 4, alphaPruneMode(120), flat, dim, MetricL2)
+	alphaLayer, err := buildPrunedLayer(candidates, 4, alphaPruneMode(120), flat, dim, MetricL2, 1)
 	if err != nil {
 		t.Fatalf("buildPrunedLayer alpha returned error: %v", err)
 	}
@@ -170,6 +173,48 @@ func TestBuildIsDeterministicWithFixedSeed(t *testing.T) {
 	}
 }
 
+func TestBuildIsDeterministicAcrossWorkerCounts(t *testing.T) {
+	vectors := synth.UniformVectors(96, 4)
+	cfg := Config{
+		Dim:               4,
+		M:                 4,
+		K0:                8,
+		CandidateK:        8,
+		ConstructionL:     12,
+		Iterations:        1,
+		Seed:              29,
+		CandidateRecall:   0.90,
+		CandidateControls: 32,
+	}
+
+	sequential := mustBuildIndex(t, withWorkers(cfg, 1), vectors)
+	parallel := mustBuildIndex(t, withWorkers(cfg, 4), vectors)
+
+	if !reflect.DeepEqual(sequential.levels, parallel.levels) {
+		t.Fatalf("levels differ across worker counts:\nworkers=1 %v\nworkers=4 %v", sequential.levels, parallel.levels)
+	}
+	if sequential.entryPoint != parallel.entryPoint {
+		t.Fatalf("entryPoint = %d and %d, want equal", sequential.entryPoint, parallel.entryPoint)
+	}
+	if sequential.maxLayer != parallel.maxLayer {
+		t.Fatalf("maxLayer = %d and %d, want equal", sequential.maxLayer, parallel.maxLayer)
+	}
+	if !reflect.DeepEqual(sequential.layers, parallel.layers) {
+		t.Fatal("layers differ across worker counts")
+	}
+
+	query := []float32{0.2, 0.4, 0.6, 0.8}
+	left, err := sequential.Search(query, 5, 16)
+	if err != nil {
+		t.Fatalf("sequential Search returned error: %v", err)
+	}
+	right, err := parallel.Search(query, 5, 16)
+	if err != nil {
+		t.Fatalf("parallel Search returned error: %v", err)
+	}
+	assertResults(t, right, left)
+}
+
 func TestAssignLevelsUsesSeed(t *testing.T) {
 	left := assignLevels(512, 8, 1)
 	right := assignLevels(512, 8, 2)
@@ -183,7 +228,7 @@ func TestRefineCandidatesStopsWhenQualityRequirementIsMet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
-	candidates, err := exactCandidates(flat, dim, MetricL2, 4)
+	candidates, err := exactCandidates(flat, dim, MetricL2, 4, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
@@ -246,11 +291,14 @@ func TestAcquireCandidatesByGraphSearchDropsSelfAndKeepsNearest(t *testing.T) {
 	}
 	adjacency := completeLayer(5)
 
-	got := acquireCandidatesByGraphSearch(adjacency, flat, dim, MetricL2, 2, 5)
+	got := acquireCandidatesByGraphSearch(adjacency, flat, dim, MetricL2, 2, 5, 1)
 	assertCandidateList(t, got[2], []candidate{
 		{id: 1, distance: 1},
 		{id: 3, distance: 1},
 	})
+
+	parallel := acquireCandidatesByGraphSearch(adjacency, flat, dim, MetricL2, 2, 5, 4)
+	assertCandidateList(t, parallel[2], got[2])
 }
 
 func TestEstimateCandidateRecallUsesFixedControls(t *testing.T) {
@@ -258,7 +306,7 @@ func TestEstimateCandidateRecallUsesFixedControls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
-	candidates, err := exactCandidates(flat, dim, MetricL2, 4)
+	candidates, err := exactCandidates(flat, dim, MetricL2, 4, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
@@ -281,6 +329,11 @@ func TestEstimateCandidateRecallUsesFixedControls(t *testing.T) {
 	if left != right {
 		t.Fatalf("fixed-control recall = %v and %v, want equal", left, right)
 	}
+}
+
+func withWorkers(cfg Config, workers int) Config {
+	cfg.Workers = workers
+	return cfg
 }
 
 func TestBuildLayerInvariants(t *testing.T) {

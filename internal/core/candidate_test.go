@@ -17,7 +17,7 @@ func TestExactCandidates(t *testing.T) {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
-	got, err := exactCandidates(flat, dim, MetricL2, 2)
+	got, err := exactCandidates(flat, dim, MetricL2, 2, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestExactCandidatesExcludesSelfAndTruncatesK(t *testing.T) {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
-	got, err := exactCandidates(flat, dim, MetricL2, 10)
+	got, err := exactCandidates(flat, dim, MetricL2, 10, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestExactCandidatesTieBreaksByID(t *testing.T) {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
-	got, err := exactCandidates(flat, dim, MetricL2, 2)
+	got, err := exactCandidates(flat, dim, MetricL2, 2, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestExactCandidatesTieBreaksByID(t *testing.T) {
 }
 
 func TestExactCandidatesEmptyAndSingleVector(t *testing.T) {
-	got, err := exactCandidates(nil, 2, MetricL2, 3)
+	got, err := exactCandidates(nil, 2, MetricL2, 3, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates empty returned error: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestExactCandidatesEmptyAndSingleVector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
-	got, err = exactCandidates(flat, dim, MetricL2, 3)
+	got, err = exactCandidates(flat, dim, MetricL2, 3, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates single returned error: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestExactCandidatesRejectsInvalidInput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := exactCandidates(tt.vectors, tt.dim, MetricL2, tt.k); err == nil {
+			if _, err := exactCandidates(tt.vectors, tt.dim, MetricL2, tt.k, 1); err == nil {
 				t.Fatal("exactCandidates returned nil error")
 			}
 		})
@@ -135,7 +135,7 @@ func TestExactCandidatesCosineUsesNormalizedVectors(t *testing.T) {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
-	got, err := exactCandidates(flat, dim, MetricCosine, 2)
+	got, err := exactCandidates(flat, dim, MetricCosine, 2, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
@@ -153,11 +153,11 @@ func TestApproximateKNNGCandidatesAreBoundedSortedAndDeterministic(t *testing.T)
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
 
-	left, err := approximateKNNGCandidates(flat, dim, MetricL2, 6, 42, 4)
+	left, err := approximateKNNGCandidates(flat, dim, MetricL2, 6, 42, 4, 1)
 	if err != nil {
 		t.Fatalf("approximateKNNGCandidates returned error: %v", err)
 	}
-	right, err := approximateKNNGCandidates(flat, dim, MetricL2, 6, 42, 4)
+	right, err := approximateKNNGCandidates(flat, dim, MetricL2, 6, 42, 4, 1)
 	if err != nil {
 		t.Fatalf("approximateKNNGCandidates second run returned error: %v", err)
 	}
@@ -183,11 +183,11 @@ func TestApproximateKNNGCandidatesRecallAgainstExact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
-	approx, err := approximateKNNGCandidates(flat, dim, MetricL2, 8, 7, 6)
+	approx, err := approximateKNNGCandidates(flat, dim, MetricL2, 8, 7, 6, 1)
 	if err != nil {
 		t.Fatalf("approximateKNNGCandidates returned error: %v", err)
 	}
-	exact, err := exactCandidates(flat, dim, MetricL2, 8)
+	exact, err := exactCandidates(flat, dim, MetricL2, 8, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
@@ -196,6 +196,33 @@ func TestApproximateKNNGCandidatesRecallAgainstExact(t *testing.T) {
 	if recall < 0.70 {
 		t.Fatalf("candidate recall = %.3f, want >= 0.70", recall)
 	}
+}
+
+func TestCandidateBuildersAreDeterministicAcrossWorkerCounts(t *testing.T) {
+	flat, dim, err := FlattenVectors(lineVectors(96), 0, MetricL2)
+	if err != nil {
+		t.Fatalf("FlattenVectors returned error: %v", err)
+	}
+
+	exactSequential, err := exactCandidates(flat, dim, MetricL2, 8, 1)
+	if err != nil {
+		t.Fatalf("exactCandidates sequential returned error: %v", err)
+	}
+	exactParallel, err := exactCandidates(flat, dim, MetricL2, 8, 4)
+	if err != nil {
+		t.Fatalf("exactCandidates parallel returned error: %v", err)
+	}
+	assertCandidates(t, exactParallel, exactSequential)
+
+	approxSequential, err := approximateKNNGCandidates(flat, dim, MetricL2, 8, 7, 4, 1)
+	if err != nil {
+		t.Fatalf("approximateKNNGCandidates sequential returned error: %v", err)
+	}
+	approxParallel, err := approximateKNNGCandidates(flat, dim, MetricL2, 8, 7, 4, 4)
+	if err != nil {
+		t.Fatalf("approximateKNNGCandidates parallel returned error: %v", err)
+	}
+	assertCandidates(t, approxParallel, approxSequential)
 }
 
 func TestInitialApproxNeighborIDsUseSeed(t *testing.T) {
