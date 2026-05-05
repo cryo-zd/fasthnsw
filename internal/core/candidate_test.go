@@ -199,10 +199,32 @@ func TestApproximateKNNGCandidatesRecallAgainstExact(t *testing.T) {
 }
 
 func TestInitialApproxNeighborIDsUseSeed(t *testing.T) {
-	left := initialApproxNeighborIDs(128, 5, 12, 1)
-	right := initialApproxNeighborIDs(128, 5, 12, 2)
+	leftCollector := newCandidateIDCollector(128, 12)
+	rightCollector := newCandidateIDCollector(128, 12)
+	left := initialApproxNeighborIDs(128, 5, 12, 1, &leftCollector)
+	right := initialApproxNeighborIDs(128, 5, 12, 2, &rightCollector)
 	if sameIDSet(left, right) {
 		t.Fatal("initialApproxNeighborIDs returned identical sets for different seeds")
+	}
+}
+
+func TestCandidateIDCollectorDeduplicatesAndExcludesSource(t *testing.T) {
+	collector := newCandidateIDCollector(8, 4)
+	collector.reset()
+
+	collector.add(1, 2)
+	collector.add(1, 2)
+	collector.add(2, 2)
+	collector.addCandidates(2, []candidate{{id: 3}, {id: 3}, {id: 2}, {id: 4}})
+
+	want := []int{1, 3, 4}
+	if len(collector.ids) != len(want) {
+		t.Fatalf("collector ids = %v, want %v", collector.ids, want)
+	}
+	for i, id := range want {
+		if collector.ids[i] != id {
+			t.Fatalf("collector ids = %v, want %v", collector.ids, want)
+		}
 	}
 }
 
@@ -241,12 +263,16 @@ func candidateRecall(got [][]candidate, want [][]candidate, k int) float64 {
 	return float64(hits) / float64(total)
 }
 
-func sameIDSet(left map[int]struct{}, right map[int]struct{}) bool {
+func sameIDSet(left []int, right []int) bool {
 	if len(left) != len(right) {
 		return false
 	}
-	for id := range left {
-		if _, ok := right[id]; !ok {
+	seen := make(map[int]struct{}, len(left))
+	for _, id := range left {
+		seen[id] = struct{}{}
+	}
+	for _, id := range right {
+		if _, ok := seen[id]; !ok {
 			return false
 		}
 	}

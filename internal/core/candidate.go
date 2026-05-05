@@ -1,10 +1,7 @@
 package core
 
 import (
-	"container/heap"
 	"fmt"
-	"math/rand"
-	"sort"
 )
 
 // candidate is one construction-time neighbor candidate for a source node.
@@ -55,7 +52,6 @@ func exactCandidates(vectors []float32, dim int, metric Metric, k int) ([][]cand
 func exactCandidatesForNode(vectors []float32, dim int, metric Metric, sourceID int, limit int) []candidate {
 	source := vectorAt(vectors, dim, sourceID)
 	best := make(candidateMaxHeap, 0, limit)
-	heap.Init(&best)
 
 	count := len(vectors) / dim
 	for id := 0; id < count; id++ {
@@ -66,11 +62,12 @@ func exactCandidatesForNode(vectors []float32, dim int, metric Metric, sourceID 
 			id:       id,
 			distance: distance(metric, source, vectorAt(vectors, dim, id)),
 		}
-		if best.Len() < limit || betterCandidate(next, best.worst()) {
-			heap.Push(&best, next)
-			if best.Len() > limit {
-				heap.Pop(&best)
-			}
+		if best.Len() < limit {
+			best.push(next)
+			continue
+		}
+		if betterCandidate(next, best.worst()) {
+			best.replaceWorst(next)
 		}
 	}
 
@@ -111,9 +108,10 @@ func approximateKNNGCandidates(vectors []float32, dim int, metric Metric, k int,
 		return exactCandidates(vectors, dim, metric, limit)
 	}
 
+	collector := newCandidateIDCollector(count, limit*(limit+2))
 	for sourceID := 0; sourceID < count; sourceID++ {
-		initialIDs := initialApproxNeighborIDs(count, sourceID, limit, seed)
-		out[sourceID] = candidatesFromIDSet(sourceID, initialIDs, limit, vectors, dim, metric)
+		initialIDs := initialApproxNeighborIDs(count, sourceID, limit, seed, &collector)
+		out[sourceID] = candidatesFromIDs(sourceID, initialIDs, limit, vectors, dim, metric)
 	}
 
 	rounds := iterations
@@ -124,89 +122,166 @@ func approximateKNNGCandidates(vectors []float32, dim int, metric Metric, k int,
 		reverse := reverseCandidateIDs(out, count)
 		next := make([][]candidate, count)
 		for sourceID := 0; sourceID < count; sourceID++ {
-			ids := make(map[int]struct{}, limit*(limit+2))
-			addCandidateIDs(ids, sourceID, out[sourceID])
+			collector.reset()
+			collector.addCandidates(sourceID, out[sourceID])
 			for _, reverseID := range reverse[sourceID] {
-				if reverseID != sourceID {
-					ids[reverseID] = struct{}{}
-				}
+				collector.add(reverseID, sourceID)
 			}
 			for _, current := range out[sourceID] {
-				addCandidateIDs(ids, sourceID, out[current.id])
+				collector.addCandidates(sourceID, out[current.id])
 			}
 			for _, reverseID := range reverse[sourceID] {
-				addCandidateIDs(ids, sourceID, out[reverseID])
+				collector.addCandidates(sourceID, out[reverseID])
 			}
-			next[sourceID] = candidatesFromIDSet(sourceID, ids, limit, vectors, dim, metric)
+			next[sourceID] = candidatesFromIDs(sourceID, collector.ids, limit, vectors, dim, metric)
 		}
 		out = next
 	}
 	return out, nil
 }
 
-func initialApproxNeighborIDs(count int, sourceID int, limit int, seed int64) map[int]struct{} {
-	ids := make(map[int]struct{}, limit)
+// initialApproxNeighborIDs writes deterministic seed-dependent initializer ids
+// into collector and returns its current id slice. The initializer combines
+// nearby ids, which help ordered inputs, with pseudo-random ids, which keep the
+// approximate KNNG from depending on input order alone. The collector is reused
+// across source nodes to avoid map allocation in this construction hot path.
+func initialApproxNeighborIDs(count int, sourceID int, limit int, seed int64, collector *candidateIDCollector) []int {
+	collector.reset()
 
 	// Adjacent ids are cheap deterministic seeds and are useful when input ids
 	// already carry locality, while random ids keep the initializer from
 	// degenerating on shuffled datasets.
 	localBudget := limit / 2
-	for offset := 1; len(ids) < localBudget && offset < count; offset++ {
-		ids[(sourceID+offset)%count] = struct{}{}
-		if len(ids) >= localBudget {
+	for offset := 1; len(collector.ids) < localBudget && offset < count; offset++ {
+		collector.add((sourceID+offset)%count, sourceID)
+		if len(collector.ids) >= localBudget {
 			break
 		}
-		ids[(sourceID-offset+count)%count] = struct{}{}
+		collector.add((sourceID-offset+count)%count, sourceID)
 	}
 
-	rng := rand.New(rand.NewSource(mixSeed(seed, int64(sourceID), int64(count))))
-	for len(ids) < limit {
-		id := rng.Intn(count)
-		if id == sourceID {
-			continue
-		}
-		ids[id] = struct{}{}
+	stream := uint64(mixSeed(seed, int64(sourceID), int64(count)))
+	maxAttempts := uint64(count * 4)
+	for attempt := uint64(0); len(collector.ids) < limit && attempt < maxAttempts; attempt++ {
+		id := int(splitmix64(stream+attempt*0x9e3779b97f4a7c15) % uint64(count))
+		collector.add(id, sourceID)
 	}
-	return ids
+
+	if len(collector.ids) < limit {
+		start := int(splitmix64(stream^0xd1b54a32d192ed03) % uint64(count))
+		for offset := 0; len(collector.ids) < limit && offset < count; offset++ {
+			collector.add((start+offset)%count, sourceID)
+		}
+	}
+	return collector.ids
 }
 
+// reverseCandidateIDs builds R(v), the reverse-neighbor lists used by the
+// NN-Descent style exchange step. It uses one compact backing array instead of
+// per-node append growth so construction cost scales with the edge count rather
+// than with many small slice allocations.
 func reverseCandidateIDs(candidates [][]candidate, count int) [][]int {
+	offsets := make([]int, count+1)
+	for _, sourceCandidates := range candidates {
+		for _, candidate := range sourceCandidates {
+			offsets[candidate.id+1]++
+		}
+	}
+	for id := 1; id <= count; id++ {
+		offsets[id] += offsets[id-1]
+	}
+
+	storage := make([]int, offsets[count])
+	positions := make([]int, count)
+	copy(positions, offsets[:count])
 	reverse := make([][]int, count)
+
 	for sourceID, sourceCandidates := range candidates {
 		for _, candidate := range sourceCandidates {
-			reverse[candidate.id] = append(reverse[candidate.id], sourceID)
+			position := positions[candidate.id]
+			storage[position] = sourceID
+			positions[candidate.id]++
 		}
+	}
+	for id := 0; id < count; id++ {
+		reverse[id] = storage[offsets[id]:offsets[id+1]]
 	}
 	return reverse
 }
 
-func addCandidateIDs(ids map[int]struct{}, sourceID int, candidates []candidate) {
-	for _, candidate := range candidates {
-		if candidate.id == sourceID {
-			continue
-		}
-		ids[candidate.id] = struct{}{}
+// candidateIDCollector is a reusable set for construction-time neighbor ids.
+// The mark table avoids per-node maps while preserving deterministic candidate
+// expansion: ids are emitted in discovery order and later sorted by distance.
+type candidateIDCollector struct {
+	marks []uint32
+	mark  uint32
+	ids   []int
+}
+
+func newCandidateIDCollector(count int, capacity int) candidateIDCollector {
+	collector := candidateIDCollector{}
+	collector.reserve(count, capacity)
+	return collector
+}
+
+// reserve prepares the collector for a graph with count local nodes and a
+// typical per-source capacity. Existing scratch is reused when it already fits.
+func (c *candidateIDCollector) reserve(count int, capacity int) {
+	if len(c.marks) != count {
+		c.marks = make([]uint32, count)
+		c.mark = 0
+	}
+	if cap(c.ids) < capacity {
+		c.ids = make([]int, 0, capacity)
+	} else {
+		c.ids = c.ids[:0]
 	}
 }
 
-func candidatesFromIDSet(sourceID int, ids map[int]struct{}, limit int, vectors []float32, dim int, metric Metric) []candidate {
+// reset starts a new logical set without clearing the mark table on every
+// source node. Full clearing is needed only if the generation counter wraps.
+func (c *candidateIDCollector) reset() {
+	c.mark++
+	if c.mark == 0 {
+		clear(c.marks)
+		c.mark = 1
+	}
+	c.ids = c.ids[:0]
+}
+
+// add inserts one valid local id unless it is the source node or was already
+// seen in the current collector generation.
+func (c *candidateIDCollector) add(id int, sourceID int) {
+	if id == sourceID || c.marks[id] == c.mark {
+		return
+	}
+	c.marks[id] = c.mark
+	c.ids = append(c.ids, id)
+}
+
+// addCandidates inserts candidate ids into the current collector generation.
+func (c *candidateIDCollector) addCandidates(sourceID int, candidates []candidate) {
+	for _, candidate := range candidates {
+		c.add(candidate.id, sourceID)
+	}
+}
+
+// candidatesFromIDs computes distances for collected ids and keeps the nearest
+// limit candidates using a bounded max-heap.
+func candidatesFromIDs(sourceID int, ids []int, limit int, vectors []float32, dim int, metric Metric) []candidate {
 	source := vectorAt(vectors, dim, sourceID)
 	best := make(candidateMaxHeap, 0, limit)
-	heap.Init(&best)
-	count := len(vectors) / dim
-	for id := range ids {
-		if id == sourceID || id < 0 || id >= count {
-			continue
-		}
+	for _, id := range ids {
 		next := candidate{
 			id:       id,
 			distance: distance(metric, source, vectorAt(vectors, dim, id)),
 		}
-		if best.Len() < limit || betterCandidate(next, best.worst()) {
-			heap.Push(&best, next)
-			if best.Len() > limit {
-				heap.Pop(&best)
-			}
+		if best.Len() < limit {
+			best.push(next)
+			continue
+		}
+		if betterCandidate(next, best.worst()) {
+			best.replaceWorst(next)
 		}
 	}
 	return best.sorted()
@@ -226,6 +301,18 @@ func mixSeed(seed int64, values ...int64) int64 {
 	return int64(x)
 }
 
+// splitmix64 is a small deterministic mixer used to derive pseudo-random ids
+// without allocating a per-node math/rand source during KNNG initialization.
+func splitmix64(x uint64) uint64 {
+	x += 0x9e3779b97f4a7c15
+	x ^= x >> 30
+	x *= 0xbf58476d1ce4e5b9
+	x ^= x >> 27
+	x *= 0x94d049bb133111eb
+	x ^= x >> 31
+	return x
+}
+
 // betterCandidate reports whether a should sort before b in candidate order.
 // Candidate order is deterministic: distance ascending, then smaller id.
 func betterCandidate(a, b candidate) bool {
@@ -235,47 +322,4 @@ func betterCandidate(a, b candidate) bool {
 // worseCandidate reports whether a should sort after b in candidate order.
 func worseCandidate(a, b candidate) bool {
 	return compareDistanceID(a.distance, a.id, b.distance, b.id) > 0
-}
-
-// candidateMaxHeap keeps the current worst retained candidate at the root so
-// exact candidate generation can maintain a bounded top-k set in O(log k).
-type candidateMaxHeap []candidate
-
-func (h candidateMaxHeap) Len() int { return len(h) }
-
-func (h candidateMaxHeap) Less(i, j int) bool {
-	return worseCandidate(h[i], h[j])
-}
-
-func (h candidateMaxHeap) Swap(i, j int) {
-	h[i], h[j] = h[j], h[i]
-}
-
-func (h *candidateMaxHeap) Push(x any) {
-	*h = append(*h, x.(candidate))
-}
-
-func (h *candidateMaxHeap) Pop() any {
-	old := *h
-	n := len(old)
-	item := old[n-1]
-	*h = old[:n-1]
-	return item
-}
-
-// worst returns the farthest retained candidate, which is the heap root.
-func (h candidateMaxHeap) worst() candidate {
-	return h[0]
-}
-
-// sorted returns candidates in construction order: nearest distance first,
-// then id. It returns a copy so callers can mutate their list without changing
-// heap internals.
-func (h candidateMaxHeap) sorted() []candidate {
-	items := make([]candidate, len(h))
-	copy(items, h)
-	sort.Slice(items, func(i, j int) bool {
-		return betterCandidate(items[i], items[j])
-	})
-	return items
 }
