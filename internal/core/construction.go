@@ -25,23 +25,31 @@ type candidateRefinementStats struct {
 	Iterations    int
 }
 
+type constructionLayout struct {
+	labels      []int
+	layerCounts []int
+}
+
 // buildSearchableGraph constructs all HNSW layers for the vectors already
 // owned by idx. It follows the FastHNSW construction shape: assign every
-// node's maximum layer first, then build each layer over the complete set of
-// nodes present in that layer.
+// node's maximum layer first, globally relabel construction data by descending
+// layer, then build layer i over the complete prefix D_i = {u | level(u) >= i}.
 func (idx *Index) buildSearchableGraph() error {
 	levels := assignLevels(idx.count, idx.cfg.M, idx.cfg.Seed)
 	maxLayer := maxAssignedLayer(levels)
-	entryPoint := selectEntryPoint(levels, maxLayer, idx.cfg.Seed)
+	layout := buildConstructionLayout(levels, maxLayer)
+	constructionVectors := copyLayoutVectors(layout.labels, idx.vectors, idx.dim)
+	entryPoint := selectEntryPointFromLayout(layout, maxLayer, idx.cfg.Seed)
 
 	layers := make([][][]int, maxLayer+1)
 	for layer := maxLayer; layer >= 0; layer-- {
-		nodes := nodesAtOrAboveLayer(levels, layer)
+		labels := layout.labels[:layout.layerCounts[layer]]
+		layerVectors := constructionVectors[:len(labels)*idx.dim]
 		maxDegree := idx.cfg.M
 		if layer == 0 {
 			maxDegree = baseLayerMaxDegree(idx.cfg)
 		}
-		adjacency, err := buildHNSWLayer(layer, nodes, idx.count, idx.vectors, idx.dim, idx.cfg, maxDegree)
+		adjacency, err := buildHNSWLayer(layer, labels, idx.count, layerVectors, idx.dim, idx.cfg, maxDegree)
 		if err != nil {
 			return err
 		}
@@ -54,6 +62,42 @@ func (idx *Index) buildSearchableGraph() error {
 	idx.maxLayer = maxLayer
 	idx.graphReady = true
 	return nil
+}
+
+// buildConstructionLayout builds the clean-room equivalent of Algorithm 7's
+// relabeling layout. labels maps construction-local ids to original node ids,
+// and layerCounts[i] is the prefix length for D_i = {u | level(u) >= i}. The
+// official artifact's graph_utils.h getMapping uses the same descending-level
+// label order and cumulative per-layer counts; the public Go index still
+// exposes and persists original ids.
+func buildConstructionLayout(levels []int, maxLayer int) constructionLayout {
+	labels := make([]int, 0, len(levels))
+	layerCounts := make([]int, maxLayer+1)
+	for layer := maxLayer; layer >= 0; layer-- {
+		for id, assignedLayer := range levels {
+			if assignedLayer == layer {
+				labels = append(labels, id)
+			}
+		}
+		layerCounts[layer] = len(labels)
+	}
+
+	return constructionLayout{
+		labels:      labels,
+		layerCounts: layerCounts,
+	}
+}
+
+// copyLayoutVectors creates the construction-local vector buffer described by
+// constructionLayout.labels. Keeping this buffer separate lets every FastHNSW
+// layer use a contiguous prefix, as in Algorithm 7, without changing the
+// library's external node ids or the stored vector order.
+func copyLayoutVectors(labels []int, vectors []float32, dim int) []float32 {
+	out := make([]float32, len(labels)*dim)
+	for localID, globalID := range labels {
+		copy(out[localID*dim:(localID+1)*dim], vectorAt(vectors, dim, globalID))
+	}
+	return out
 }
 
 // assignLevels samples each node's maximum HNSW layer using the standard
@@ -90,9 +134,15 @@ func maxAssignedLayer(levels []int) int {
 	return maxLayer
 }
 
-// selectEntryPoint picks a deterministic seeded-random node from the top layer.
-func selectEntryPoint(levels []int, layer int, seed int64) int {
-	top := nodesAtExactLayer(levels, layer)
+// selectEntryPointFromLayout picks a deterministic seeded-random node from the
+// exact top-layer segment in a construction layout.
+func selectEntryPointFromLayout(layout constructionLayout, layer int, seed int64) int {
+	count := layout.layerCounts[layer]
+	higherCount := 0
+	if layer+1 < len(layout.layerCounts) {
+		higherCount = layout.layerCounts[layer+1]
+	}
+	top := layout.labels[higherCount:count]
 	if len(top) == 0 {
 		return -1
 	}
@@ -100,53 +150,33 @@ func selectEntryPoint(levels []int, layer int, seed int64) int {
 	return top[rng.Intn(len(top))]
 }
 
-func nodesAtExactLayer(levels []int, layer int) []int {
-	nodes := make([]int, 0)
-	for id, level := range levels {
-		if level == layer {
-			nodes = append(nodes, id)
-		}
-	}
-	return nodes
-}
-
-// nodesAtOrAboveLayer returns D_i = {u | level(u) >= i} in global id order.
-func nodesAtOrAboveLayer(levels []int, layer int) []int {
-	nodes := make([]int, 0, len(levels))
-	for id, level := range levels {
-		if level >= layer {
-			nodes = append(nodes, id)
-		}
-	}
-	return nodes
-}
-
-// buildHNSWLayer returns one global adjacency table for a layer node set.
+// buildHNSWLayer returns one global adjacency table for a layer label set.
 // Small layers are made complete because their degree is already within the
 // layer's HNSW bound: M for upper layers and 2*M for layer 0. Larger layers use
-// IterNSG and final RNG pruning.
-func buildHNSWLayer(layer int, nodes []int, totalCount int, vectors []float32, dim int, cfg Config, maxDegree int) ([][]int, error) {
-	if len(nodes)-1 <= maxDegree {
-		return buildCompleteLayer(nodes, totalCount, vectors, dim, cfg.Metric), nil
+// IterNSG and final RNG pruning. labels are original node ids ordered by
+// construction-local id; vectors is the matching compact vector prefix.
+func buildHNSWLayer(layer int, labels []int, totalCount int, vectors []float32, dim int, cfg Config, maxDegree int) ([][]int, error) {
+	if len(labels)-1 <= maxDegree {
+		return buildCompleteLayer(labels, totalCount, vectors, dim, cfg.Metric), nil
 	}
-	return buildIterNSGLayer(layer, nodes, totalCount, vectors, dim, cfg, maxDegree)
+	return buildIterNSGLayer(layer, labels, totalCount, vectors, dim, cfg, maxDegree)
 }
 
 // buildCompleteLayer connects every node in a tiny layer to every other layer
 // node. Neighbor order still follows distance then id so search behavior stays
 // deterministic even before pruning is needed.
-func buildCompleteLayer(nodes []int, totalCount int, vectors []float32, dim int, metric Metric) [][]int {
+func buildCompleteLayer(labels []int, totalCount int, vectors []float32, dim int, metric Metric) [][]int {
 	adjacency := make([][]int, totalCount)
-	for _, sourceID := range nodes {
-		source := vectorAt(vectors, dim, sourceID)
-		neighbors := make([]candidate, 0, len(nodes)-1)
-		for _, neighborID := range nodes {
+	for sourceLocalID, sourceID := range labels {
+		source := vectorAt(vectors, dim, sourceLocalID)
+		neighbors := make([]candidate, 0, len(labels)-1)
+		for neighborLocalID, neighborID := range labels {
 			if neighborID == sourceID {
 				continue
 			}
 			neighbors = append(neighbors, candidate{
 				id:       neighborID,
-				distance: distance(metric, source, vectorAt(vectors, dim, neighborID)),
+				distance: distance(metric, source, vectorAt(vectors, dim, neighborLocalID)),
 			})
 		}
 		sort.Slice(neighbors, func(i, j int) bool {
@@ -159,24 +189,24 @@ func buildCompleteLayer(nodes []int, totalCount int, vectors []float32, dim int,
 
 // buildIterNSGLayer builds one non-trivial HNSW layer. Candidate ids are local
 // while IterNSG runs, then the final RNG-pruned adjacency is mapped back to the
-// index's global node ids.
-func buildIterNSGLayer(layer int, nodes []int, totalCount int, vectors []float32, dim int, cfg Config, maxDegree int) ([][]int, error) {
-	localVectors := extractLayerVectors(nodes, vectors, dim)
+// index's global node ids. labels are the Algorithm 7 construction labels for
+// this layer prefix, and vectors is the compact vector prefix in that order.
+func buildIterNSGLayer(layer int, labels []int, totalCount int, vectors []float32, dim int, cfg Config, maxDegree int) ([][]int, error) {
 	initialK := cfg.K0
-	if initialK > len(nodes)-1 {
-		initialK = len(nodes) - 1
+	if initialK > len(labels)-1 {
+		initialK = len(labels) - 1
 	}
 	candidateK := cfg.CandidateK
-	if candidateK > len(nodes)-1 {
-		candidateK = len(nodes) - 1
+	if candidateK > len(labels)-1 {
+		candidateK = len(labels) - 1
 	}
 
 	initialKNNG, err := approximateKNNGCandidates(
-		localVectors,
+		vectors,
 		dim,
 		cfg.Metric,
 		initialK,
-		mixSeed(cfg.Seed, int64(layer), int64(len(nodes))),
+		mixSeed(cfg.Seed, int64(layer), int64(len(labels))),
 		approxKNNGIterations(cfg),
 		cfg.Workers,
 	)
@@ -185,32 +215,32 @@ func buildIterNSGLayer(layer int, nodes []int, totalCount int, vectors []float32
 	}
 
 	searchEf := cfg.ConstructionL
-	if searchEf > len(nodes)-1 {
-		searchEf = len(nodes) - 1
+	if searchEf > len(labels)-1 {
+		searchEf = len(labels) - 1
 	}
 	initialGraph := candidatesToAdjacency(initialKNNG)
-	candidates := acquireCandidatesByGraphSearch(initialGraph, localVectors, dim, cfg.Metric, candidateK, searchEf, cfg.Workers)
+	candidates := acquireCandidatesByGraphSearch(initialGraph, vectors, dim, cfg.Metric, candidateK, searchEf, cfg.Workers)
 
 	refreshCfg := fastHNSWOptKCNAConfig(cfg, candidateK, searchEf, maxDegree)
 	controlSeed := mixSeed(cfg.Seed, int64(layer), int64(candidateK))
 	qualityCfg := candidateQualityConfig{
 		TargetRecall: cfg.CandidateRecall,
 		Controls:     cfg.CandidateControls,
-		ControlIDs:   selectCandidateControls(len(nodes), cfg.CandidateControls, controlSeed),
+		ControlIDs:   selectCandidateControls(len(labels), cfg.CandidateControls, controlSeed),
 		Seed:         controlSeed,
 		K:            candidateK,
 		Workers:      cfg.Workers,
 	}
-	candidates, _, err = refineCandidatesUntilRecall(candidates, refreshCfg, qualityCfg, localVectors, dim, cfg.Metric, cfg.Iterations)
+	candidates, _, err = refineCandidatesUntilRecall(candidates, refreshCfg, qualityCfg, vectors, dim, cfg.Metric, cfg.Iterations)
 	if err != nil {
 		return nil, err
 	}
 
-	localAdjacency, err := buildFinalHNSWLayer(candidates, maxDegree, localVectors, dim, cfg.Metric, cfg.Workers)
+	localAdjacency, err := buildFinalHNSWLayer(candidates, maxDegree, vectors, dim, cfg.Metric, cfg.Workers)
 	if err != nil {
 		return nil, err
 	}
-	return mapLayerAdjacencyToGlobal(localAdjacency, nodes, totalCount), nil
+	return mapLayerAdjacencyToGlobal(localAdjacency, labels, totalCount), nil
 }
 
 func buildFinalHNSWLayer(candidates [][]candidate, maxDegree int, vectors []float32, dim int, metric Metric, workers int) ([][]int, error) {
@@ -361,25 +391,15 @@ func minInt(a int, b int) int {
 	return b
 }
 
-// extractLayerVectors copies a layer's global vectors into a dense local block
-// so construction helpers can use compact local ids without sparse lookups.
-func extractLayerVectors(nodes []int, vectors []float32, dim int) []float32 {
-	out := make([]float32, len(nodes)*dim)
-	for localID, globalID := range nodes {
-		copy(out[localID*dim:(localID+1)*dim], vectorAt(vectors, dim, globalID))
-	}
-	return out
-}
-
 // mapLayerAdjacencyToGlobal expands local IterNSG adjacency back to the full
 // index shape expected by Search: adjacency[globalNodeID] -> global neighbors.
-func mapLayerAdjacencyToGlobal(localAdjacency [][]int, nodes []int, totalCount int) [][]int {
+func mapLayerAdjacencyToGlobal(localAdjacency [][]int, labels []int, totalCount int) [][]int {
 	globalAdjacency := make([][]int, totalCount)
 	for localID, neighbors := range localAdjacency {
-		globalID := nodes[localID]
+		globalID := labels[localID]
 		globalNeighbors := make([]int, len(neighbors))
 		for i, localNeighborID := range neighbors {
-			globalNeighbors[i] = nodes[localNeighborID]
+			globalNeighbors[i] = labels[localNeighborID]
 		}
 		globalAdjacency[globalID] = globalNeighbors
 	}
