@@ -27,6 +27,7 @@ func TestBuildAndQueryCommands(t *testing.T) {
 		"-candidate-k", "2",
 		"-construction-l", "2",
 		"-iterations", "1",
+		"-workers", "1",
 		"-candidate-recall", "0.9",
 		"-candidate-controls", "2",
 	}, &stdout, &stderr)
@@ -181,6 +182,7 @@ func TestValidateClusteredCommand(t *testing.T) {
 		"-candidate-k", "8",
 		"-construction-l", "12",
 		"-iterations", "1",
+		"-workers", "1",
 		"-candidate-recall", "0.8",
 		"-candidate-controls", "8",
 	}, &stdout, &stderr)
@@ -242,6 +244,7 @@ func TestValidateRejectsInvalidInputs(t *testing.T) {
 		{name: "bad ef", args: []string{"validate", "-dataset", "clustered", "-k", "4", "-ef", "3"}, want: "greater than or equal"},
 		{name: "missing hdf5 input", args: []string{"validate", "-dataset", "hdf5"}, want: "requires -input"},
 		{name: "invalid metric", args: []string{"validate", "-metric", "dot"}, want: "unsupported metric"},
+		{name: "invalid workers", args: []string{"validate", "-dataset", "clustered", "-workers", "-1"}, want: "Workers"},
 	}
 
 	for _, tt := range tests {

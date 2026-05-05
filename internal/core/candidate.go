@@ -18,8 +18,9 @@ type candidate struct {
 // This O(n^2) builder is the correctness baseline for pruning, IterNSG, recall
 // checks, and tiny-layer fallbacks. It excludes each source node itself,
 // returns candidates sorted by distance then id, and operates on the same flat
-// vector storage used by the index.
-func exactCandidates(vectors []float32, dim int, metric Metric, k int) ([][]candidate, error) {
+// vector storage used by the index. Workers only partition independent source
+// nodes, so output remains source-id ordered.
+func exactCandidates(vectors []float32, dim int, metric Metric, k int, workers int) ([][]candidate, error) {
 	if dim <= 0 {
 		return nil, fmt.Errorf("fasthnsw: vector dimension must be positive")
 	}
@@ -41,8 +42,12 @@ func exactCandidates(vectors []float32, dim int, metric Metric, k int) ([][]cand
 		limit = count - 1
 	}
 
-	for sourceID := 0; sourceID < count; sourceID++ {
+	err := parallelForNodes(count, workers, func(_ int, sourceID int) error {
 		out[sourceID] = exactCandidatesForNode(vectors, dim, metric, sourceID, limit)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -83,7 +88,9 @@ func exactCandidatesForNode(vectors []float32, dim int, metric Metric, sourceID 
 // node with deterministic random neighbors, repeatedly exchange candidates
 // through forward and reverse neighborhoods, then keep the nearest k candidates.
 // Exact candidates are used only when k already covers the whole tiny layer.
-func approximateKNNGCandidates(vectors []float32, dim int, metric Metric, k int, seed int64, iterations int) ([][]candidate, error) {
+// Workers only partition node-local work; candidate lists are still stored in
+// source-id order for deterministic downstream pruning.
+func approximateKNNGCandidates(vectors []float32, dim int, metric Metric, k int, seed int64, iterations int, workers int) ([][]candidate, error) {
 	if dim <= 0 {
 		return nil, fmt.Errorf("fasthnsw: vector dimension must be positive")
 	}
@@ -105,13 +112,18 @@ func approximateKNNGCandidates(vectors []float32, dim int, metric Metric, k int,
 		limit = count - 1
 	}
 	if count <= limit+1 {
-		return exactCandidates(vectors, dim, metric, limit)
+		return exactCandidates(vectors, dim, metric, limit, workers)
 	}
 
-	collector := newCandidateIDCollector(count, limit*(limit+2))
-	for sourceID := 0; sourceID < count; sourceID++ {
-		initialIDs := initialApproxNeighborIDs(count, sourceID, limit, seed, &collector)
+	workerCount := effectiveWorkerCount(workers, count)
+	collectors := makeCandidateIDCollectors(workerCount, count, limit*(limit+2))
+	err := parallelForNodes(count, workers, func(workerID int, sourceID int) error {
+		initialIDs := initialApproxNeighborIDs(count, sourceID, limit, seed, &collectors[workerID])
 		out[sourceID] = candidatesFromIDs(sourceID, initialIDs, limit, vectors, dim, metric)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	rounds := iterations
@@ -121,7 +133,8 @@ func approximateKNNGCandidates(vectors []float32, dim int, metric Metric, k int,
 	for round := 0; round < rounds; round++ {
 		reverse := reverseCandidateIDs(out, count)
 		next := make([][]candidate, count)
-		for sourceID := 0; sourceID < count; sourceID++ {
+		err := parallelForNodes(count, workers, func(workerID int, sourceID int) error {
+			collector := &collectors[workerID]
 			collector.reset()
 			collector.addCandidates(sourceID, out[sourceID])
 			for _, reverseID := range reverse[sourceID] {
@@ -134,6 +147,10 @@ func approximateKNNGCandidates(vectors []float32, dim int, metric Metric, k int,
 				collector.addCandidates(sourceID, out[reverseID])
 			}
 			next[sourceID] = candidatesFromIDs(sourceID, collector.ids, limit, vectors, dim, metric)
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 		out = next
 	}
@@ -222,6 +239,17 @@ func newCandidateIDCollector(count int, capacity int) candidateIDCollector {
 	collector := candidateIDCollector{}
 	collector.reserve(count, capacity)
 	return collector
+}
+
+// makeCandidateIDCollectors creates one reusable collector per worker. Sharing
+// collectors across goroutines would corrupt mark-table generations, so
+// construction parallelism keeps this scratch worker-local.
+func makeCandidateIDCollectors(workers int, count int, capacity int) []candidateIDCollector {
+	collectors := make([]candidateIDCollector, workers)
+	for i := range collectors {
+		collectors[i].reserve(count, capacity)
+	}
+	return collectors
 }
 
 // reserve prepares the collector for a graph with count local nodes and a

@@ -101,6 +101,7 @@ func printValidationResult(stdout io.Writer, cfg fasthnsw.Config, result benchda
 	fmt.Fprintf(stdout, "alpha=%.6f\n", cfg.Alpha)
 	fmt.Fprintf(stdout, "iterations=%d\n", cfg.Iterations)
 	fmt.Fprintf(stdout, "seed=%d\n", cfg.Seed)
+	fmt.Fprintf(stdout, "workers=%d\n", cfg.Workers)
 	fmt.Fprintf(stdout, "k=%d\n", result.K)
 	fmt.Fprintf(stdout, "ef=%d\n", result.EfSearch)
 	fmt.Fprintf(stdout, "build_ms=%.3f\n", float64(result.BuildTime.Microseconds())/1000)

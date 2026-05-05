@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestBuildPrunedLayerFromExactCandidates(t *testing.T) {
 	flat, dim, err := FlattenVectors([][]float32{
@@ -11,12 +14,12 @@ func TestBuildPrunedLayerFromExactCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
-	candidates, err := exactCandidates(flat, dim, MetricL2, 2)
+	candidates, err := exactCandidates(flat, dim, MetricL2, 2, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
 
-	got, err := buildPrunedLayer(candidates, 2, rngPruneMode(), flat, dim, MetricL2)
+	got, err := buildPrunedLayer(candidates, 2, rngPruneMode(), flat, dim, MetricL2, 1)
 	if err != nil {
 		t.Fatalf("buildPrunedLayer returned error: %v", err)
 	}
@@ -43,7 +46,7 @@ func TestBuildPrunedLayerAddsReverseEdges(t *testing.T) {
 		nil,
 	}
 
-	got, err := buildPrunedLayer(candidates, 2, rngPruneMode(), flat, dim, MetricL2)
+	got, err := buildPrunedLayer(candidates, 2, rngPruneMode(), flat, dim, MetricL2, 1)
 	if err != nil {
 		t.Fatalf("buildPrunedLayer returned error: %v", err)
 	}
@@ -70,7 +73,7 @@ func TestBuildPrunedLayerNormalizesSelfAndDuplicates(t *testing.T) {
 		{{id: 2}, {id: 0}},
 	}
 
-	got, err := buildPrunedLayer(candidates, 2, rngPruneMode(), flat, dim, MetricL2)
+	got, err := buildPrunedLayer(candidates, 2, rngPruneMode(), flat, dim, MetricL2, 1)
 	if err != nil {
 		t.Fatalf("buildPrunedLayer returned error: %v", err)
 	}
@@ -105,7 +108,7 @@ func TestBuildPrunedLayerEnforcesMaxDegreeAfterReverseMerge(t *testing.T) {
 		{{id: 0}},
 	}
 
-	got, err := buildPrunedLayer(candidates, 1, rngPruneMode(), flat, dim, MetricL2)
+	got, err := buildPrunedLayer(candidates, 1, rngPruneMode(), flat, dim, MetricL2, 1)
 	if err != nil {
 		t.Fatalf("buildPrunedLayer returned error: %v", err)
 	}
@@ -131,11 +134,11 @@ func TestBuildPrunedLayerAlphaModeCanRetainRNGPrunedEdge(t *testing.T) {
 		nil,
 	}
 
-	rng, err := buildPrunedLayer(candidates, 4, rngPruneMode(), flat, dim, MetricL2)
+	rng, err := buildPrunedLayer(candidates, 4, rngPruneMode(), flat, dim, MetricL2, 1)
 	if err != nil {
 		t.Fatalf("buildPrunedLayer RNG returned error: %v", err)
 	}
-	alpha, err := buildPrunedLayer(candidates, 4, alphaPruneMode(120), flat, dim, MetricL2)
+	alpha, err := buildPrunedLayer(candidates, 4, alphaPruneMode(120), flat, dim, MetricL2, 1)
 	if err != nil {
 		t.Fatalf("buildPrunedLayer alpha returned error: %v", err)
 	}
@@ -145,9 +148,22 @@ func TestBuildPrunedLayerAlphaModeCanRetainRNGPrunedEdge(t *testing.T) {
 }
 
 func TestBuildPrunedLayerRejectsBadCandidateID(t *testing.T) {
-	_, err := buildPrunedLayer([][]candidate{{{id: 2}}, nil}, 1, rngPruneMode(), []float32{0, 1}, 1, MetricL2)
+	_, err := buildPrunedLayer([][]candidate{{{id: 2}}, nil}, 1, rngPruneMode(), []float32{0, 1}, 1, MetricL2, 1)
 	if err == nil {
 		t.Fatal("buildPrunedLayer returned nil error")
+	}
+}
+
+func TestBuildPrunedLayerParallelReturnsFirstSourceError(t *testing.T) {
+	_, err := buildPrunedLayer([][]candidate{
+		{{id: 9}},
+		{{id: 8}},
+	}, 1, rngPruneMode(), []float32{0, 1}, 1, MetricL2, 2)
+	if err == nil {
+		t.Fatal("buildPrunedLayer returned nil error")
+	}
+	if got, want := err.Error(), "candidate id 9"; !strings.Contains(got, want) {
+		t.Fatalf("error = %q, want %q", got, want)
 	}
 }
 

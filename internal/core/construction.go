@@ -16,6 +16,7 @@ type candidateQualityConfig struct {
 	ControlIDs   []int
 	Seed         int64
 	K            int
+	Workers      int
 }
 
 type candidateRefinementStats struct {
@@ -177,6 +178,7 @@ func buildIterNSGLayer(layer int, nodes []int, totalCount int, vectors []float32
 		initialK,
 		mixSeed(cfg.Seed, int64(layer), int64(len(nodes))),
 		approxKNNGIterations(cfg),
+		cfg.Workers,
 	)
 	if err != nil {
 		return nil, err
@@ -187,7 +189,7 @@ func buildIterNSGLayer(layer int, nodes []int, totalCount int, vectors []float32
 		searchEf = len(nodes) - 1
 	}
 	initialGraph := candidatesToAdjacency(initialKNNG)
-	candidates := acquireCandidatesByGraphSearch(initialGraph, localVectors, dim, cfg.Metric, candidateK, searchEf)
+	candidates := acquireCandidatesByGraphSearch(initialGraph, localVectors, dim, cfg.Metric, candidateK, searchEf, cfg.Workers)
 
 	refreshCfg := fastHNSWOptKCNAConfig(cfg, candidateK, searchEf, maxDegree)
 	controlSeed := mixSeed(cfg.Seed, int64(layer), int64(candidateK))
@@ -197,21 +199,22 @@ func buildIterNSGLayer(layer int, nodes []int, totalCount int, vectors []float32
 		ControlIDs:   selectCandidateControls(len(nodes), cfg.CandidateControls, controlSeed),
 		Seed:         controlSeed,
 		K:            candidateK,
+		Workers:      cfg.Workers,
 	}
 	candidates, _, err = refineCandidatesUntilRecall(candidates, refreshCfg, qualityCfg, localVectors, dim, cfg.Metric, cfg.Iterations)
 	if err != nil {
 		return nil, err
 	}
 
-	localAdjacency, err := buildFinalHNSWLayer(candidates, maxDegree, localVectors, dim, cfg.Metric)
+	localAdjacency, err := buildFinalHNSWLayer(candidates, maxDegree, localVectors, dim, cfg.Metric, cfg.Workers)
 	if err != nil {
 		return nil, err
 	}
 	return mapLayerAdjacencyToGlobal(localAdjacency, nodes, totalCount), nil
 }
 
-func buildFinalHNSWLayer(candidates [][]candidate, maxDegree int, vectors []float32, dim int, metric Metric) ([][]int, error) {
-	return buildPrunedLayer(candidates, maxDegree, rngPruneMode(), vectors, dim, metric)
+func buildFinalHNSWLayer(candidates [][]candidate, maxDegree int, vectors []float32, dim int, metric Metric, workers int) ([][]int, error) {
+	return buildPrunedLayer(candidates, maxDegree, rngPruneMode(), vectors, dim, metric, workers)
 }
 
 func fastHNSWOptKCNAConfig(cfg Config, candidateK int, searchEf int, maxDegree int) optKCNAConfig {
@@ -221,6 +224,7 @@ func fastHNSWOptKCNAConfig(cfg Config, candidateK int, searchEf int, maxDegree i
 		MaxDegree:         maxDegree,
 		AlphaDegrees:      cfg.Alpha,
 		ConnectComponents: false,
+		Workers:           cfg.Workers,
 	}
 }
 
@@ -250,14 +254,15 @@ func candidatesToAdjacency(candidates [][]candidate) [][]int {
 // acquireCandidatesByGraphSearch implements the Algorithm 6 transition from an
 // initial KNNG to k-CNA candidate sets: each node searches the current graph
 // using its own vector as the query, then keeps the nearest k non-self results.
-func acquireCandidatesByGraphSearch(adjacency [][]int, vectors []float32, dim int, metric Metric, candidateK int, searchEf int) [][]candidate {
+func acquireCandidatesByGraphSearch(adjacency [][]int, vectors []float32, dim int, metric Metric, candidateK int, searchEf int, workers int) [][]candidate {
 	out := make([][]candidate, len(adjacency))
-	var scratch graphSearchScratch
-	scratch.reserve(len(adjacency), searchEf)
-	for sourceID := range adjacency {
-		results := graphSearchLayer(adjacency, vectors, dim, metric, sourceID, vectorAt(vectors, dim, sourceID), searchEf, &scratch)
+	workerCount := effectiveWorkerCount(workers, len(adjacency))
+	scratches := makeGraphSearchScratches(workerCount, len(adjacency), searchEf)
+	_ = parallelForNodes(len(adjacency), workers, func(workerID int, sourceID int) error {
+		results := graphSearchLayer(adjacency, vectors, dim, metric, sourceID, vectorAt(vectors, dim, sourceID), searchEf, &scratches[workerID])
 		out[sourceID] = candidatesFromResults(sourceID, results, candidateK)
-	}
+		return nil
+	})
 	return out
 }
 
@@ -301,13 +306,22 @@ func estimateCandidateRecall(candidates [][]candidate, cfg candidateQualityConfi
 	if controls == nil {
 		controls = selectCandidateControls(count, cfg.Controls, cfg.Seed)
 	}
-	var hits int
-	var total int
-	for _, sourceID := range controls {
+	controlHits := make([]int, len(controls))
+	controlTotals := make([]int, len(controls))
+	_ = parallelForNodes(len(controls), cfg.Workers, func(_ int, controlIndex int) error {
+		sourceID := controls[controlIndex]
 		exact := exactCandidatesForNode(vectors, dim, metric, sourceID, minInt(cfg.K, count-1))
 		sourceHits, sourceTotal := eval.CountHitsAtK(candidateIDs(candidates[sourceID]), candidateIDs(exact), cfg.K)
-		hits += sourceHits
-		total += sourceTotal
+		controlHits[controlIndex] = sourceHits
+		controlTotals[controlIndex] = sourceTotal
+		return nil
+	})
+
+	var hits int
+	var total int
+	for i := range controls {
+		hits += controlHits[i]
+		total += controlTotals[i]
 	}
 	if total == 0 {
 		return 1, nil

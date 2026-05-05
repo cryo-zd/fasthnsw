@@ -42,7 +42,7 @@ func TestOptKCNAOutputsSortedCandidatesWithoutSelf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
-	candidates, err := exactCandidates(flat, dim, MetricL2, 2)
+	candidates, err := exactCandidates(flat, dim, MetricL2, 2, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
@@ -160,11 +160,11 @@ func TestOptKCNAPreservesOrImprovesCandidateRecall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlattenVectors returned error: %v", err)
 	}
-	initial, err := approximateKNNGCandidates(flat, dim, MetricL2, 4, 5, 2)
+	initial, err := approximateKNNGCandidates(flat, dim, MetricL2, 4, 5, 2, 1)
 	if err != nil {
 		t.Fatalf("approximateKNNGCandidates returned error: %v", err)
 	}
-	exact, err := exactCandidates(flat, dim, MetricL2, 6)
+	exact, err := exactCandidates(flat, dim, MetricL2, 6, 1)
 	if err != nil {
 		t.Fatalf("exactCandidates returned error: %v", err)
 	}
@@ -200,6 +200,7 @@ func TestOptKCNARejectsInvalidInput(t *testing.T) {
 		{name: "bad SearchEf", candidates: make([][]candidate, 2), cfg: optKCNAConfig{CandidateK: 2, SearchEf: 1, MaxDegree: 1, AlphaDegrees: 60}, vectors: []float32{0, 1}, dim: 1, metric: MetricL2},
 		{name: "bad MaxDegree", candidates: make([][]candidate, 2), cfg: optKCNAConfig{CandidateK: 1, SearchEf: 1, MaxDegree: 0, AlphaDegrees: 60}, vectors: []float32{0, 1}, dim: 1, metric: MetricL2},
 		{name: "bad alpha", candidates: make([][]candidate, 2), cfg: optKCNAConfig{CandidateK: 1, SearchEf: 1, MaxDegree: 1, AlphaDegrees: 59}, vectors: []float32{0, 1}, dim: 1, metric: MetricL2},
+		{name: "bad workers", candidates: make([][]candidate, 2), cfg: optKCNAConfig{CandidateK: 1, SearchEf: 1, MaxDegree: 1, AlphaDegrees: 60, Workers: -1}, vectors: []float32{0, 1}, dim: 1, metric: MetricL2},
 		{name: "bad metric", candidates: make([][]candidate, 2), cfg: optKCNAConfig{CandidateK: 1, SearchEf: 1, MaxDegree: 1, AlphaDegrees: 60}, vectors: []float32{0, 1}, dim: 1, metric: Metric(99)},
 		{name: "bad dim", candidates: make([][]candidate, 2), cfg: optKCNAConfig{CandidateK: 1, SearchEf: 1, MaxDegree: 1, AlphaDegrees: 60}, vectors: []float32{0, 1}, dim: 0, metric: MetricL2},
 		{name: "unaligned storage", candidates: make([][]candidate, 1), cfg: optKCNAConfig{CandidateK: 1, SearchEf: 1, MaxDegree: 1, AlphaDegrees: 60}, vectors: []float32{0, 1, 2}, dim: 2, metric: MetricL2},
