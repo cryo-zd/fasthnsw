@@ -2,6 +2,7 @@ package core
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/cryo-zd/fasthnsw/internal/synth"
@@ -99,6 +100,30 @@ func TestBuildHNSWLayerCompletesWhenDegreeEqualsBound(t *testing.T) {
 			t.Fatalf("len(adjacency[%d]) = %d, want complete degree 2: %v", sourceID, len(neighbors), neighbors)
 		}
 	}
+}
+
+func TestBuildHNSWLayerUsesConstructionLocalVectorOrder(t *testing.T) {
+	flat, dim, err := FlattenVectors([][]float32{
+		{100},
+		{0},
+		{2},
+	}, 0, MetricL2)
+	if err != nil {
+		t.Fatalf("FlattenVectors returned error: %v", err)
+	}
+	labels := []int{1, 2, 0}
+	constructionVectors := copyLayoutVectors(labels, flat, dim)
+
+	got, err := buildHNSWLayer(0, labels, 3, constructionVectors, dim, Config{Metric: MetricL2}, 2)
+	if err != nil {
+		t.Fatalf("buildHNSWLayer returned error: %v", err)
+	}
+
+	assertAdjacency(t, got, [][]int{
+		{2, 1},
+		{2, 0},
+		{1, 0},
+	})
 }
 
 func TestFastHNSWOptKCNAConfigCopiesRefreshParameters(t *testing.T) {
@@ -250,6 +275,40 @@ func TestAssignLevelsUsesSeed(t *testing.T) {
 	}
 }
 
+func TestBuildConstructionLayoutOrdersLabelsByDescendingLayer(t *testing.T) {
+	levels := []int{0, 2, 1, 2, 0, 3}
+	layout := buildConstructionLayout(levels, maxAssignedLayer(levels))
+
+	assertIntSlice(t, layout.labels, []int{5, 1, 3, 2, 0, 4})
+	assertIntSlice(t, layout.layerCounts, []int{6, 4, 3, 1})
+}
+
+func TestConstructionLayoutLayerPrefixesContainLayerNodeSets(t *testing.T) {
+	levels := []int{1, 0, 3, 2, 1, 0, 2}
+	layout := buildConstructionLayout(levels, maxAssignedLayer(levels))
+
+	for layer := range layout.layerCounts {
+		got := append([]int(nil), layout.labels[:layout.layerCounts[layer]]...)
+		sort.Ints(got)
+		want := nodesWithLevelAtLeast(levels, layer)
+		assertIntSlice(t, got, want)
+	}
+}
+
+func TestSelectEntryPointFromLayoutUsesExactTopLayer(t *testing.T) {
+	levels := []int{0, 2, 1, 2, 0}
+	layout := buildConstructionLayout(levels, maxAssignedLayer(levels))
+
+	left := selectEntryPointFromLayout(layout, 2, 11)
+	right := selectEntryPointFromLayout(layout, 2, 11)
+	if left != right {
+		t.Fatalf("entry points differ under fixed seed: %d vs %d", left, right)
+	}
+	if levels[left] != 2 {
+		t.Fatalf("entry point level = %d, want top layer 2", levels[left])
+	}
+}
+
 func TestRefineCandidatesStopsWhenQualityRequirementIsMet(t *testing.T) {
 	flat, dim, err := FlattenVectors(lineVectors(32), 0, MetricL2)
 	if err != nil {
@@ -359,6 +418,23 @@ func TestEstimateCandidateRecallUsesFixedControls(t *testing.T) {
 func withWorkers(cfg Config, workers int) Config {
 	cfg.Workers = workers
 	return cfg
+}
+
+func assertIntSlice(t *testing.T, got []int, want []int) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("slice = %v, want %v", got, want)
+	}
+}
+
+func nodesWithLevelAtLeast(levels []int, layer int) []int {
+	nodes := make([]int, 0, len(levels))
+	for id, assignedLayer := range levels {
+		if assignedLayer >= layer {
+			nodes = append(nodes, id)
+		}
+	}
+	return nodes
 }
 
 func TestBuildLayerInvariants(t *testing.T) {
