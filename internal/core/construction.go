@@ -221,19 +221,17 @@ func buildFinalHNSWLayer(candidates [][]candidate, maxDegree int, vectors []floa
 // candidate-refresh round.
 //
 // Section 5.3 states that each HNSW layer is an RNG index because it prunes
-// k-CNA results without DFS connectivity enhancement. The official artifact
-// applies the same pg_type=HNSW branch to every PG build round, so FastHNSW
-// candidate refresh also keeps the temporary graph free of connectivity repair.
-// NSG-style repair remains available through optKCNAConfig for future index
-// modes, but the FastHNSW path must not enable it.
+// k-CNA results without DFS connectivity enhancement. In the official
+// artifact, KGraphImpl::build calls buildPG for each construction round, and
+// buildPG skips tree_grow when pg_type is HNSW or NSW. This implementation
+// follows that behavior without copying artifact source code.
 func fastHNSWOptKCNAConfig(cfg Config, candidateK int, searchEf int, maxDegree int) optKCNAConfig {
 	return optKCNAConfig{
-		CandidateK:        candidateK,
-		SearchEf:          searchEf,
-		MaxDegree:         maxDegree,
-		AlphaDegrees:      cfg.Alpha,
-		ConnectComponents: false,
-		Workers:           cfg.Workers,
+		CandidateK:   candidateK,
+		SearchEf:     searchEf,
+		MaxDegree:    maxDegree,
+		AlphaDegrees: cfg.Alpha,
+		Workers:      cfg.Workers,
 	}
 }
 

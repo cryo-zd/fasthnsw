@@ -101,7 +101,7 @@ func TestBuildHNSWLayerCompletesWhenDegreeEqualsBound(t *testing.T) {
 	}
 }
 
-func TestFastHNSWOptKCNAConfigDisablesConnectivityRepair(t *testing.T) {
+func TestFastHNSWOptKCNAConfigCopiesRefreshParameters(t *testing.T) {
 	cfg := fastHNSWOptKCNAConfig(Config{Alpha: 90}, 12, 24, 6)
 
 	if cfg.CandidateK != 12 {
@@ -115,9 +115,6 @@ func TestFastHNSWOptKCNAConfigDisablesConnectivityRepair(t *testing.T) {
 	}
 	if cfg.AlphaDegrees != 90 {
 		t.Fatalf("AlphaDegrees = %v, want 90", cfg.AlphaDegrees)
-	}
-	if cfg.ConnectComponents {
-		t.Fatal("ConnectComponents = true, want false for FastHNSW/HNSW construction")
 	}
 	if cfg.Workers != 0 {
 		t.Fatalf("Workers = %d, want copied from zero config", cfg.Workers)
@@ -264,11 +261,10 @@ func TestRefineCandidatesStopsWhenQualityRequirementIsMet(t *testing.T) {
 	}
 
 	got, stats, err := refineCandidatesUntilRecall(candidates, optKCNAConfig{
-		CandidateK:        4,
-		SearchEf:          6,
-		MaxDegree:         4,
-		AlphaDegrees:      90,
-		ConnectComponents: true,
+		CandidateK:   4,
+		SearchEf:     6,
+		MaxDegree:    4,
+		AlphaDegrees: 90,
 	}, candidateQualityConfig{
 		TargetRecall: 0.98,
 		Controls:     16,
@@ -295,11 +291,10 @@ func TestRefineCandidatesUsesIterationsAsMaximumCap(t *testing.T) {
 	candidates := make([][]candidate, len(flat)/dim)
 
 	_, stats, err := refineCandidatesUntilRecall(candidates, optKCNAConfig{
-		CandidateK:        8,
-		SearchEf:          8,
-		MaxDegree:         4,
-		AlphaDegrees:      90,
-		ConnectComponents: true,
+		CandidateK:   8,
+		SearchEf:     8,
+		MaxDegree:    4,
+		AlphaDegrees: 90,
 	}, candidateQualityConfig{
 		TargetRecall: 1,
 		Controls:     24,

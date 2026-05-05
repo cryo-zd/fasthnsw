@@ -72,55 +72,7 @@ func TestOptKCNAOutputsSortedCandidatesWithoutSelf(t *testing.T) {
 	}
 }
 
-func TestConnectWeakComponentsInPlaceAddsDeterministicBridge(t *testing.T) {
-	flat, dim, err := FlattenVectors([][]float32{
-		{0},
-		{1},
-		{10},
-		{11},
-	}, 0, MetricL2)
-	if err != nil {
-		t.Fatalf("FlattenVectors returned error: %v", err)
-	}
-	adjacency := [][]int{
-		{1},
-		{0},
-		{3},
-		{2},
-	}
-
-	got := connectWeakComponentsInPlace(adjacency, flat, dim, MetricL2)
-	want := [][]int{
-		{1},
-		{0, 2},
-		{3, 1},
-		{2},
-	}
-	assertAdjacency(t, got, want)
-}
-
-func TestConnectWeakComponentsInPlaceMutatesAdjacency(t *testing.T) {
-	flat, dim, err := FlattenVectors([][]float32{
-		{0},
-		{1},
-		{10},
-	}, 0, MetricL2)
-	if err != nil {
-		t.Fatalf("FlattenVectors returned error: %v", err)
-	}
-	adjacency := [][]int{
-		{1},
-		{0},
-		nil,
-	}
-
-	_ = connectWeakComponentsInPlace(adjacency, flat, dim, MetricL2)
-	if len(adjacency[2]) == 0 {
-		t.Fatalf("adjacency was not mutated with a repair edge: %v", adjacency)
-	}
-}
-
-func TestOptKCNAConnectivityRepairCanReachOtherComponent(t *testing.T) {
+func TestOptKCNADoesNotBridgeDisconnectedComponents(t *testing.T) {
 	flat, dim, err := FlattenVectors([][]float32{
 		{0},
 		{1},
@@ -138,21 +90,17 @@ func TestOptKCNAConnectivityRepairCanReachOtherComponent(t *testing.T) {
 	}
 
 	got, err := optKCNA(candidates, optKCNAConfig{
-		CandidateK:        3,
-		SearchEf:          4,
-		MaxDegree:         2,
-		AlphaDegrees:      120,
-		ConnectComponents: true,
+		CandidateK:   3,
+		SearchEf:     4,
+		MaxDegree:    2,
+		AlphaDegrees: 120,
 	}, flat, dim, MetricL2)
 	if err != nil {
 		t.Fatalf("optKCNA returned error: %v", err)
 	}
 
-	assertCandidateList(t, got[0], []candidate{
-		{id: 1, distance: 1},
-		{id: 2, distance: 100},
-		{id: 3, distance: 121},
-	})
+	assertCandidateList(t, got[0], []candidate{{id: 1, distance: 1}})
+	assertCandidateList(t, got[2], []candidate{{id: 3, distance: 1}})
 }
 
 func TestOptKCNAPreservesOrImprovesCandidateRecall(t *testing.T) {
@@ -170,11 +118,10 @@ func TestOptKCNAPreservesOrImprovesCandidateRecall(t *testing.T) {
 	}
 
 	refreshed, err := optKCNA(initial, optKCNAConfig{
-		CandidateK:        6,
-		SearchEf:          8,
-		MaxDegree:         6,
-		AlphaDegrees:      90,
-		ConnectComponents: true,
+		CandidateK:   6,
+		SearchEf:     8,
+		MaxDegree:    6,
+		AlphaDegrees: 90,
 	}, flat, dim, MetricL2)
 	if err != nil {
 		t.Fatalf("optKCNA returned error: %v", err)
