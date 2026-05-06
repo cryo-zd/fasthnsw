@@ -1,9 +1,4 @@
-# Examples
-
-```sh
-go run ./examples/basic
-go run ./examples/persistence
-```
+# Build and Query
 
 The optional smoke CLI uses a simple text vector format: one vector per line,
 whitespace-separated `float32` values, with blank lines and lines starting with
