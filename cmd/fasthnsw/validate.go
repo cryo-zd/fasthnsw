@@ -104,8 +104,8 @@ func printValidationResult(stdout io.Writer, cfg fasthnsw.Config, result benchda
 	fmt.Fprintf(stdout, "workers=%d\n", cfg.Workers)
 	fmt.Fprintf(stdout, "k=%d\n", result.K)
 	fmt.Fprintf(stdout, "ef=%d\n", result.EfSearch)
-	fmt.Fprintf(stdout, "build_ms=%.3f\n", float64(result.BuildTime.Microseconds())/1000)
-	fmt.Fprintf(stdout, "query_ms=%.3f\n", float64(result.QueryTime.Microseconds())/1000)
+	fmt.Fprintf(stdout, "build_s=%.3f\n", float64(result.BuildTime.Seconds()))
+	fmt.Fprintf(stdout, "query_s=%.3f\n", float64(result.QueryTime.Seconds()))
 	fmt.Fprintf(stdout, "qps=%.3f\n", result.QPS())
 	fmt.Fprintf(stdout, "recall_at_%d=%.6f\n", result.K, result.Recall)
 	if result.IndexBytes > 0 {
