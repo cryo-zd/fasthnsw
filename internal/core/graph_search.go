@@ -94,8 +94,26 @@ func graphSearchLayerTopK(adjacency [][]int, vectors []float32, dim int, metric 
 }
 
 func graphSearchLayerInto(adjacency [][]int, vectors []float32, dim int, metric Metric, entry int, query []float32, ef int, scratch *graphSearchScratch) bool {
+	return graphSearchLayerFromEntriesInto(adjacency, vectors, dim, metric, []int{entry}, query, ef, scratch)
+}
+
+// graphSearchLayerFromEntries runs HNSW SEARCH-LAYER with one or more entry
+// points. Standard incremental HNSW construction carries the result set from
+// one layer into the next as multiple entry points; public queries still use
+// the singleton wrapper above.
+func graphSearchLayerFromEntries(adjacency [][]int, vectors []float32, dim int, metric Metric, entries []int, query []float32, ef int, scratch *graphSearchScratch) []Result {
+	if scratch == nil {
+		scratch = &graphSearchScratch{}
+	}
+	if !graphSearchLayerFromEntriesInto(adjacency, vectors, dim, metric, entries, query, ef, scratch) {
+		return nil
+	}
+	return scratch.sortedResults(scratch.results.Len())
+}
+
+func graphSearchLayerFromEntriesInto(adjacency [][]int, vectors []float32, dim int, metric Metric, entries []int, query []float32, ef int, scratch *graphSearchScratch) bool {
 	count := len(adjacency)
-	if ef <= 0 || entry < 0 || entry >= count {
+	if ef <= 0 || len(entries) == 0 {
 		return false
 	}
 	if scratch == nil {
@@ -103,10 +121,25 @@ func graphSearchLayerInto(adjacency [][]int, vectors []float32, dim int, metric 
 	}
 	scratch.reset(count, ef)
 
-	scratch.markVisited(entry)
-	result := resultForNode(vectors, dim, metric, entry, query)
-	scratch.candidates.push(result)
-	scratch.results.push(result)
+	for _, entry := range entries {
+		if entry < 0 || entry >= count || scratch.isVisited(entry) {
+			continue
+		}
+		scratch.markVisited(entry)
+		result := resultForNode(vectors, dim, metric, entry, query)
+		if scratch.results.Len() < ef {
+			scratch.candidates.push(result)
+			scratch.results.push(result)
+			continue
+		}
+		if betterResult(result, scratch.results.worst()) {
+			scratch.candidates.push(result)
+			scratch.results.replaceWorst(result)
+		}
+	}
+	if scratch.results.Len() == 0 {
+		return false
+	}
 
 	for scratch.candidates.Len() > 0 {
 		current := scratch.candidates.pop()

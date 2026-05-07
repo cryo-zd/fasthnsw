@@ -190,9 +190,37 @@ func TestValidateClusteredCommand(t *testing.T) {
 		t.Fatalf("validate exit code = %d, stderr = %s", code, stderr.String())
 	}
 	got := stdout.String()
-	for _, want := range []string{"dataset=clustered", "vectors=40", "queries=8", "qps=", "recall_at_3="} {
+	for _, want := range []string{"algorithm=fasthnsw", "dataset=clustered", "vectors=40", "queries=8", "qps=", "recall_at_3="} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("validate stdout = %q, want %q", got, want)
+		}
+	}
+}
+
+func TestValidateStandardHNSWCommand(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := run([]string{
+		"validate",
+		"-algorithm", "hnsw",
+		"-dataset", "clustered",
+		"-vectors", "40",
+		"-query-count", "8",
+		"-dim", "4",
+		"-clusters", "4",
+		"-k", "3",
+		"-ef", "8",
+		"-m", "4",
+		"-construction-l", "12",
+		"-workers", "1",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("validate hnsw exit code = %d, stderr = %s", code, stderr.String())
+	}
+	got := stdout.String()
+	for _, want := range []string{"algorithm=hnsw", "dataset=clustered", "vectors=40", "queries=8", "qps=", "recall_at_3="} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("validate hnsw stdout = %q, want %q", got, want)
 		}
 	}
 }
@@ -244,6 +272,7 @@ func TestValidateRejectsInvalidInputs(t *testing.T) {
 		{name: "bad ef", args: []string{"validate", "-dataset", "clustered", "-k", "4", "-ef", "3"}, want: "greater than or equal"},
 		{name: "missing hdf5 input", args: []string{"validate", "-dataset", "hdf5"}, want: "requires -input"},
 		{name: "invalid metric", args: []string{"validate", "-metric", "dot"}, want: "unsupported metric"},
+		{name: "invalid algorithm", args: []string{"validate", "-algorithm", "flat"}, want: "unsupported validation algorithm"},
 		{name: "invalid workers", args: []string{"validate", "-dataset", "clustered", "-workers", "-1"}, want: "Workers"},
 	}
 

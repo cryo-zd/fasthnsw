@@ -2,12 +2,25 @@ package benchdata
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"time"
 
 	"github.com/cryo-zd/fasthnsw"
 	"github.com/cryo-zd/fasthnsw/internal/core"
 	"github.com/cryo-zd/fasthnsw/internal/eval"
+)
+
+// ValidationAlgorithm selects the construction path used by validation. It is
+// internal to benchmark tooling; the public package continues to expose only
+// the FastHNSW Build method.
+type ValidationAlgorithm string
+
+const (
+	// AlgorithmFastHNSW uses the library's public FastHNSW construction path.
+	AlgorithmFastHNSW ValidationAlgorithm = "fasthnsw"
+	// AlgorithmHNSW uses the internal standard incremental HNSW baseline.
+	AlgorithmHNSW ValidationAlgorithm = "hnsw"
 )
 
 // Dataset is an in-memory benchmark dataset. It is intentionally internal so
@@ -72,6 +85,7 @@ func (d Dataset) Validate(k int) error {
 // ValidationResult is the machine-readable summary produced by a validation
 // run over one dataset and one build/search configuration.
 type ValidationResult struct {
+	Algorithm   ValidationAlgorithm
 	Dataset     Dataset
 	K           int
 	EfSearch    int
@@ -94,6 +108,12 @@ func (r ValidationResult) QPS() float64 {
 // against the dataset ground truth. If saveIndexPath is non-empty, the built
 // index is persisted and the resulting file size is reported.
 func RunValidation(dataset Dataset, cfg fasthnsw.Config, k int, efSearch int, saveIndexPath string) (ValidationResult, error) {
+	return RunValidationWithAlgorithm(dataset, cfg, AlgorithmFastHNSW, k, efSearch, saveIndexPath)
+}
+
+// RunValidationWithAlgorithm is RunValidation with an explicit internal
+// construction algorithm selection for CLI and benchmark comparisons.
+func RunValidationWithAlgorithm(dataset Dataset, cfg fasthnsw.Config, algorithm ValidationAlgorithm, k int, efSearch int, saveIndexPath string) (ValidationResult, error) {
 	if k <= 0 {
 		return ValidationResult{}, fmt.Errorf("k must be positive")
 	}
@@ -103,18 +123,18 @@ func RunValidation(dataset Dataset, cfg fasthnsw.Config, k int, efSearch int, sa
 	if err := dataset.Validate(k); err != nil {
 		return ValidationResult{}, err
 	}
+	if err := validateAlgorithm(algorithm); err != nil {
+		return ValidationResult{}, err
+	}
 
 	cfg.Metric = dataset.Metric
 	if cfg.Dim == 0 {
 		cfg.Dim = dataset.Dim()
 	}
-	idx, err := fasthnsw.New(cfg)
-	if err != nil {
-		return ValidationResult{}, err
-	}
 
 	buildStart := time.Now()
-	if err := idx.Build(dataset.Base); err != nil {
+	idx, err := buildValidationIndex(dataset.Base, cfg, algorithm)
+	if err != nil {
 		return ValidationResult{}, err
 	}
 	buildTime := time.Since(buildStart)
@@ -153,6 +173,7 @@ func RunValidation(dataset Dataset, cfg fasthnsw.Config, k int, efSearch int, sa
 	queryTime := time.Since(searchStart)
 
 	return ValidationResult{
+		Algorithm:   algorithm,
 		Dataset:     dataset,
 		K:           k,
 		EfSearch:    efSearch,
@@ -162,6 +183,38 @@ func RunValidation(dataset Dataset, cfg fasthnsw.Config, k int, efSearch int, sa
 		IndexBytes:  indexBytes,
 		SearchCount: len(dataset.Queries),
 	}, nil
+}
+
+type validationIndex interface {
+	Search(query []float32, k int, efSearch int) ([]fasthnsw.Result, error)
+	Save(w io.Writer) error
+}
+
+func validateAlgorithm(algorithm ValidationAlgorithm) error {
+	switch algorithm {
+	case AlgorithmFastHNSW, AlgorithmHNSW:
+		return nil
+	default:
+		return fmt.Errorf("unsupported validation algorithm %q", algorithm)
+	}
+}
+
+func buildValidationIndex(vectors [][]float32, cfg fasthnsw.Config, algorithm ValidationAlgorithm) (validationIndex, error) {
+	switch algorithm {
+	case AlgorithmFastHNSW:
+		idx, err := fasthnsw.New(cfg)
+		if err != nil {
+			return nil, err
+		}
+		if err := idx.Build(vectors); err != nil {
+			return nil, err
+		}
+		return idx, nil
+	case AlgorithmHNSW:
+		return core.BuildStandardHNSWForBenchmark(core.Config(cfg), vectors)
+	default:
+		return nil, fmt.Errorf("unsupported validation algorithm %q", algorithm)
+	}
 }
 
 // ExactGroundTruth computes deterministic exact nearest-neighbor ids for
