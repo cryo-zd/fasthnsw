@@ -13,6 +13,7 @@ import (
 func runValidate(args []string, stdout io.Writer) error {
 	cfgFlags := defaultConfigFlags()
 	fs := newFlagSet("validate")
+	algorithm := fs.String("algorithm", string(benchdata.AlgorithmFastHNSW), "construction algorithm: fasthnsw or hnsw")
 	datasetKind := fs.String("dataset", "clustered", "dataset type: clustered, uniform, hdf5, fvecs, or bvecs")
 	inputPath := fs.String("input", "", "ANN-Benchmarks HDF5 input file")
 	basePath := fs.String("base", "", "raw base vector file")
@@ -49,12 +50,41 @@ func runValidate(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	result, err := benchdata.RunValidation(dataset, cfg, *k, *efSearch, *saveIndexPath)
+	validationAlgorithm, err := parseValidationAlgorithm(*algorithm)
+	if err != nil {
+		return err
+	}
+	cfg = displayConfigForAlgorithm(cfg, validationAlgorithm)
+	result, err := benchdata.RunValidationWithAlgorithm(dataset, cfg, validationAlgorithm, *k, *efSearch, *saveIndexPath)
 	if err != nil {
 		return err
 	}
 	printValidationResult(stdout, cfg, result)
 	return nil
+}
+
+func parseValidationAlgorithm(value string) (benchdata.ValidationAlgorithm, error) {
+	switch value {
+	case string(benchdata.AlgorithmFastHNSW):
+		return benchdata.AlgorithmFastHNSW, nil
+	case string(benchdata.AlgorithmHNSW):
+		return benchdata.AlgorithmHNSW, nil
+	default:
+		return "", fmt.Errorf("unsupported validation algorithm %q", value)
+	}
+}
+
+func displayConfigForAlgorithm(cfg fasthnsw.Config, algorithm benchdata.ValidationAlgorithm) fasthnsw.Config {
+	if algorithm != benchdata.AlgorithmHNSW {
+		return cfg
+	}
+	if cfg.ConstructionL == 0 {
+		cfg.ConstructionL = cfg.EfConstruction
+	}
+	if cfg.ConstructionL > 0 && cfg.CandidateK > cfg.ConstructionL {
+		cfg.CandidateK = cfg.ConstructionL
+	}
+	return cfg
 }
 
 func loadValidationDataset(kind string, metric fasthnsw.Metric, inputPath string, basePath string, queriesPath string, truthPath string, vectorCount int, queryCount int, dim int, clusters int, limitBase int, limitQueries int, k int) (benchdata.Dataset, error) {
@@ -89,17 +119,22 @@ func validationDim(configuredDim int) int {
 }
 
 func printValidationResult(stdout io.Writer, cfg fasthnsw.Config, result benchdata.ValidationResult) {
+	fmt.Fprintf(stdout, "algorithm=%s\n", result.Algorithm)
 	fmt.Fprintf(stdout, "dataset=%s\n", result.Dataset.Name)
 	fmt.Fprintf(stdout, "metric=%s\n", metricName(result.Dataset.Metric))
 	fmt.Fprintf(stdout, "vectors=%d\n", len(result.Dataset.Base))
 	fmt.Fprintf(stdout, "queries=%d\n", len(result.Dataset.Queries))
 	fmt.Fprintf(stdout, "dim=%d\n", result.Dataset.Dim())
 	fmt.Fprintf(stdout, "m=%d\n", cfg.M)
-	fmt.Fprintf(stdout, "k0=%d\n", cfg.K0)
-	fmt.Fprintf(stdout, "candidate_k=%d\n", cfg.CandidateK)
-	fmt.Fprintf(stdout, "construction_l=%d\n", cfg.ConstructionL)
-	fmt.Fprintf(stdout, "alpha=%.6f\n", cfg.Alpha)
-	fmt.Fprintf(stdout, "iterations=%d\n", cfg.Iterations)
+	if result.Algorithm == benchdata.AlgorithmHNSW {
+		fmt.Fprintf(stdout, "ef_construction=%d\n", cfg.ConstructionL)
+	} else {
+		fmt.Fprintf(stdout, "k0=%d\n", cfg.K0)
+		fmt.Fprintf(stdout, "candidate_k=%d\n", cfg.CandidateK)
+		fmt.Fprintf(stdout, "construction_l=%d\n", cfg.ConstructionL)
+		fmt.Fprintf(stdout, "alpha=%.6f\n", cfg.Alpha)
+		fmt.Fprintf(stdout, "iterations=%d\n", cfg.Iterations)
+	}
 	fmt.Fprintf(stdout, "seed=%d\n", cfg.Seed)
 	fmt.Fprintf(stdout, "workers=%d\n", cfg.Workers)
 	fmt.Fprintf(stdout, "k=%d\n", result.K)

@@ -43,5 +43,5 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage: fasthnsw <build|query|validate> [flags]")
 	fmt.Fprintln(w, "  build -input vectors.txt -output index.fhnsw [config flags]")
 	fmt.Fprintln(w, "  query -index index.fhnsw -queries queries.txt -k 10 -ef 64")
-	fmt.Fprintln(w, "  validate -dataset clustered|uniform|hdf5|fvecs|bvecs [dataset flags] -k 10 -ef 64")
+	fmt.Fprintln(w, "  validate [-algorithm fasthnsw|hnsw] -dataset clustered|uniform|hdf5|fvecs|bvecs [dataset flags] -k 10 -ef 64")
 }

@@ -107,6 +107,30 @@ func BenchmarkBuild(b *testing.B) {
 	}
 }
 
+func BenchmarkBuildAlgorithms(b *testing.B) {
+	vectors := synth.ClusteredVectors(1024, 16, 32)
+	queries := synth.ClusteredQueries(16, 16, 32)
+	cfg := Config{Dim: 16, M: 12, K0: 48, CandidateK: 48, ConstructionL: 48, Iterations: 1, Seed: 101, CandidateRecall: 0.90, CandidateControls: 128, Workers: 1}
+
+	b.Run("fasthnsw", func(b *testing.B) {
+		benchmarkBuildFactory(b, queries, func() (*Index, error) {
+			idx, err := New(cfg)
+			if err != nil {
+				return nil, err
+			}
+			if err := idx.Build(vectors); err != nil {
+				return nil, err
+			}
+			return idx, nil
+		})
+	})
+	b.Run("hnsw", func(b *testing.B) {
+		benchmarkBuildFactory(b, queries, func() (*Index, error) {
+			return BuildStandardHNSWForBenchmark(cfg, vectors)
+		})
+	})
+}
+
 func BenchmarkBuildWorkers(b *testing.B) {
 	vectors := synth.UniformVectors(1024, 16)
 	baseCfg := Config{Dim: 16, M: 12, K0: 24, CandidateK: 24, ConstructionL: 48, Iterations: 2, Seed: 101, CandidateRecall: 0.90, CandidateControls: 128}
