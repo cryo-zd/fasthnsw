@@ -21,10 +21,13 @@ go run ./cmd/fasthnsw query \
 
 # Validation and Benchmarks
 
+> Use `-algorithm hnsw` on the same validation command to build a standard incremental HNSW baseline for internal construction-speed comparisons. The baseline is wired into the CLI only; it is not part of the public Go API.
+
 Generated clustered or uniform validation runs without external files:
 
 ```sh
 go run ./cmd/fasthnsw validate \
+  -algorithm fasthnsw \
   -dataset clustered \
   -vectors 1000 \
   -query-count 100 \
@@ -38,6 +41,7 @@ datasets:
 
 ```sh
 go run ./cmd/fasthnsw validate \
+  -algorithm fasthnsw \
   -dataset hdf5 \
   -input sift-128-euclidean.hdf5 \
   -metric l2 \
@@ -54,6 +58,7 @@ SIFT-style raw files are also supported:
 
 ```sh
 go run ./cmd/fasthnsw validate \
+  -algorithm fasthnsw \
   -dataset fvecs \
   -base sift_base.fvecs \
   -queries sift_query.fvecs \
