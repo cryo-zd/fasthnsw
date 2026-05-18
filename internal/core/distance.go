@@ -5,10 +5,12 @@ import (
 	"math"
 )
 
-// squaredL2 returns squared Euclidean distance without taking a square root.
-// ANN ranking only needs relative ordering, so avoiding sqrt keeps the hot
-// distance loop cheaper.
-func squaredL2(a, b []float32) float32 {
+// squaredL2Generic returns squared Euclidean distance without taking a square
+// root. ANN ranking only needs relative ordering, so avoiding sqrt keeps the
+// hot distance loop cheaper. Platform wrappers may replace squaredL2 with a
+// SIMD implementation, but this generic kernel remains the correctness
+// fallback on every build.
+func squaredL2Generic(a, b []float32) float32 {
 	var sum float32
 	for i := range a {
 		d := a[i] - b[i]
@@ -17,8 +19,9 @@ func squaredL2(a, b []float32) float32 {
 	return sum
 }
 
-// dot returns the dot product for equal-length vectors.
-func dot(a, b []float32) float32 {
+// dotGeneric returns the dot product for equal-length vectors. Platform
+// wrappers may replace dot with a SIMD implementation.
+func dotGeneric(a, b []float32) float32 {
 	var sum float32
 	for i := range a {
 		sum += a[i] * b[i]

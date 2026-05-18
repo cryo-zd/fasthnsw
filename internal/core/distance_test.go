@@ -1,12 +1,33 @@
 package core
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestSquaredL2(t *testing.T) {
 	got := squaredL2([]float32{1, 2, 3}, []float32{4, 2, -1})
 	const want float32 = 25
 	if got != want {
 		t.Fatalf("squaredL2 = %v, want %v", got, want)
+	}
+}
+
+func TestDistanceKernelsMatchGeneric(t *testing.T) {
+	for _, dim := range []int{1, 2, 7, 8, 15, 16, 31, 32, 127, 128, 129} {
+		left := make([]float32, dim)
+		right := make([]float32, dim)
+		for i := range left {
+			left[i] = float32((i%17)-8) * 0.125
+			right[i] = float32((i%13)-6) * 0.0625
+		}
+
+		if got, want := squaredL2(left, right), squaredL2Generic(left, right); !closeFloat32(got, want, 1e-4) {
+			t.Fatalf("dim %d squaredL2 = %v, want generic %v", dim, got, want)
+		}
+		if got, want := dot(left, right), dotGeneric(left, right); !closeFloat32(got, want, 1e-4) {
+			t.Fatalf("dim %d dot = %v, want generic %v", dim, got, want)
+		}
 	}
 }
 
@@ -38,4 +59,8 @@ func TestCosineDistanceNormalized(t *testing.T) {
 	if got := cosineDistanceNormalized(a, a); got != 0 {
 		t.Fatalf("identical cosine distance = %v, want 0", got)
 	}
+}
+
+func closeFloat32(got float32, want float32, tolerance float64) bool {
+	return math.Abs(float64(got-want)) <= tolerance
 }
