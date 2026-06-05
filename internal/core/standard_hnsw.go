@@ -61,55 +61,80 @@ func (idx *Index) buildStandardHNSWGraph() error {
 		layers[layer] = make([][]int, idx.count)
 	}
 
-	efConstruction := idx.cfg.ConstructionL
-	if efConstruction < idx.cfg.M {
-		efConstruction = idx.cfg.M
-	}
-
-	entryPoint := 0
-	maxLayer := levels[0]
-	var scratch graphSearchScratch
-	for nodeID := 1; nodeID < idx.count; nodeID++ {
-		nodeLevel := levels[nodeID]
-		query := vectorAt(idx.vectors, idx.dim, nodeID)
-		currentEntries := []int{entryPoint}
-
-		for layer := maxLayer; layer > nodeLevel; layer-- {
-			results := graphSearchLayerFromEntries(layers[layer], idx.vectors, idx.dim, idx.cfg.Metric, currentEntries, query, 1, &scratch)
-			if len(results) > 0 {
-				currentEntries = resultIDs(results)
-			}
-		}
-
-		minLayer := nodeLevel
-		if minLayer > maxLayer {
-			minLayer = maxLayer
-		}
-		for layer := minLayer; layer >= 0; layer-- {
-			candidates := graphSearchLayerFromEntries(layers[layer], idx.vectors, idx.dim, idx.cfg.Metric, currentEntries, query, efConstruction, &scratch)
-			selected, err := selectStandardHNSWNeighbors(nodeID, candidates, standardLayerMaxDegree(idx.cfg, layer), layers[layer], idx.vectors, idx.dim, idx.cfg.Metric, false, false)
-			if err != nil {
-				return err
-			}
-			if err := connectStandardHNSWNeighbors(layers[layer], nodeID, selected, standardLayerMaxDegree(idx.cfg, layer), idx.vectors, idx.dim, idx.cfg.Metric); err != nil {
-				return err
-			}
-			if len(candidates) > 0 {
-				currentEntries = resultIDs(candidates)
-			}
-		}
-
-		if nodeLevel > maxLayer {
-			entryPoint = nodeID
-			maxLayer = nodeLevel
-		}
-	}
-
 	idx.levels = levels
 	idx.layers = layers
-	idx.entryPoint = entryPoint
-	idx.maxLayer = maxLayer
+	idx.entryPoint = 0
+	idx.maxLayer = levels[0]
 	idx.graphReady = true
+	idx.levelSampler = nil
+
+	efConstruction := effectiveStandardEfConstruction(idx.cfg)
+	var scratch graphSearchScratch
+	for nodeID := 1; nodeID < idx.count; nodeID++ {
+		if err := idx.insertStandardHNSWNode(nodeID, levels[nodeID], efConstruction, &scratch); err != nil {
+			idx.graphReady = false
+			return err
+		}
+	}
+	idx.graphReady = true
+	return nil
+}
+
+func effectiveStandardEfConstruction(cfg Config) int {
+	efConstruction := cfg.ConstructionL
+	if efConstruction < cfg.M {
+		efConstruction = cfg.M
+	}
+	return efConstruction
+}
+
+func (idx *Index) insertStandardHNSWNode(nodeID int, nodeLevel int, efConstruction int, scratch *graphSearchScratch) error {
+	if nodeID == 0 {
+		return nil
+	}
+	if idx.entryPoint < 0 || idx.entryPoint >= idx.count {
+		return fmt.Errorf("fasthnsw: entry point %d out of range", idx.entryPoint)
+	}
+	if nodeLevel >= len(idx.layers) {
+		return fmt.Errorf("fasthnsw: node level %d exceeds layer count %d", nodeLevel, len(idx.layers))
+	}
+	if scratch == nil {
+		scratch = &graphSearchScratch{}
+	}
+
+	query := vectorAt(idx.vectors, idx.dim, nodeID)
+	oldMaxLayer := idx.maxLayer
+	currentEntries := []int{idx.entryPoint}
+
+	for layer := oldMaxLayer; layer > nodeLevel; layer-- {
+		results := graphSearchLayerFromEntries(idx.layers[layer], idx.vectors, idx.dim, idx.cfg.Metric, currentEntries, query, 1, scratch)
+		if len(results) > 0 {
+			currentEntries = resultIDs(results)
+		}
+	}
+
+	minLayer := nodeLevel
+	if minLayer > oldMaxLayer {
+		minLayer = oldMaxLayer
+	}
+	for layer := minLayer; layer >= 0; layer-- {
+		candidates := graphSearchLayerFromEntries(idx.layers[layer], idx.vectors, idx.dim, idx.cfg.Metric, currentEntries, query, efConstruction, scratch)
+		selected, err := selectStandardHNSWNeighbors(nodeID, candidates, standardLayerMaxDegree(idx.cfg, layer), idx.layers[layer], idx.vectors, idx.dim, idx.cfg.Metric, false, false)
+		if err != nil {
+			return err
+		}
+		if err := connectStandardHNSWNeighbors(idx.layers[layer], nodeID, selected, standardLayerMaxDegree(idx.cfg, layer), idx.vectors, idx.dim, idx.cfg.Metric); err != nil {
+			return err
+		}
+		if len(candidates) > 0 {
+			currentEntries = resultIDs(candidates)
+		}
+	}
+
+	if nodeLevel > oldMaxLayer {
+		idx.entryPoint = nodeID
+		idx.maxLayer = nodeLevel
+	}
 	return nil
 }
 

@@ -27,6 +27,13 @@ func TestFacadePublicAPI(t *testing.T) {
 	if len(results) != 1 || results[0].ID != 0 {
 		t.Fatalf("Search results = %v, want id 0", results)
 	}
+	addedID, err := idx.AddVector([]float32{2, 0})
+	if err != nil {
+		t.Fatalf("AddVector returned error: %v", err)
+	}
+	if addedID != 3 {
+		t.Fatalf("AddVector id = %d, want 3", addedID)
+	}
 
 	var buf bytes.Buffer
 	if err := idx.Save(&buf); err != nil {

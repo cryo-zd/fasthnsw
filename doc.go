@@ -2,6 +2,6 @@
 // a FastHNSW-style layer-by-layer construction strategy.
 //
 // The initial implementation exposes the public API, configuration defaults,
-// validation behavior, FastHNSW-style graph construction, ANN search, and
-// versioned binary persistence.
+// validation behavior, FastHNSW-style graph construction, incremental HNSW
+// insertion, ANN search, and versioned binary persistence.
 package fasthnsw

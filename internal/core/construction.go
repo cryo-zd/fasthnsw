@@ -105,22 +105,28 @@ func copyLayoutVectors(labels []int, vectors []float32, dim int) []float32 {
 // randomness, which keeps builds reproducible.
 func assignLevels(count int, maxDegree int, seed int64) []int {
 	levels := make([]int, count)
-	if count == 0 || maxDegree <= 1 {
-		// M=1 is a valid but sparse configuration. The logarithmic sampler is
-		// undefined there, so construction falls back to a single-layer graph.
+	if count == 0 {
 		return levels
 	}
 
 	rng := rand.New(rand.NewSource(seed))
-	normalizer := math.Log(float64(maxDegree))
 	for id := 0; id < count; id++ {
-		u := rng.Float64()
-		if u == 0 {
-			u = math.SmallestNonzeroFloat64
-		}
-		levels[id] = int(-math.Log(u) / normalizer)
+		levels[id] = sampleLevel(rng, maxDegree)
 	}
 	return levels
+}
+
+func sampleLevel(rng *rand.Rand, maxDegree int) int {
+	if maxDegree <= 1 {
+		// M=1 is a valid but sparse configuration. The logarithmic sampler is
+		// undefined there, so construction falls back to a single-layer graph.
+		return 0
+	}
+	u := rng.Float64()
+	if u == 0 {
+		u = math.SmallestNonzeroFloat64
+	}
+	return int(-math.Log(u) / math.Log(float64(maxDegree)))
 }
 
 // maxAssignedLayer returns the highest sampled layer in a level table.
