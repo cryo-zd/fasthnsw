@@ -179,6 +179,128 @@ func TestSearchTrustsReadyGraphInHotPath(t *testing.T) {
 	assertResults(t, got, []Result{{ID: 0, Distance: 0}})
 }
 
+func TestAddVectorInitializesEmptyIndex(t *testing.T) {
+	idx, err := New(Config{M: 4, ConstructionL: 8, Seed: 7})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	id, err := idx.AddVector([]float32{1, 2})
+	if err != nil {
+		t.Fatalf("AddVector returned error: %v", err)
+	}
+	if id != 0 {
+		t.Fatalf("AddVector id = %d, want 0", id)
+	}
+	if idx.count != 1 || idx.dim != 2 || idx.cfg.Dim != 2 {
+		t.Fatalf("index metadata = count:%d dim:%d cfgDim:%d, want count 1 dim 2", idx.count, idx.dim, idx.cfg.Dim)
+	}
+	if !idx.graphReady {
+		t.Fatal("graphReady = false, want true")
+	}
+
+	got, err := idx.Search([]float32{1, 2}, 1, 1)
+	if err != nil {
+		t.Fatalf("Search returned error: %v", err)
+	}
+	assertResults(t, got, []Result{{ID: 0, Distance: 0}})
+}
+
+func TestAddVectorAfterBuildMakesVectorSearchable(t *testing.T) {
+	idx := mustBuildIndex(t, Config{Dim: 1, M: 4, K0: 8, CandidateK: 8, ConstructionL: 12, Seed: 11}, [][]float32{{0}, {10}, {20}})
+
+	id, err := idx.AddVector([]float32{5})
+	if err != nil {
+		t.Fatalf("AddVector returned error: %v", err)
+	}
+	if id != 3 {
+		t.Fatalf("AddVector id = %d, want 3", id)
+	}
+
+	got, err := idx.Search([]float32{5}, 1, 8)
+	if err != nil {
+		t.Fatalf("Search returned error: %v", err)
+	}
+	assertResults(t, got, []Result{{ID: 3, Distance: 0}})
+	if err := validateLayerAdjacency(idx.cfg, idx.levels, idx.layers, idx.count, idx.entryPoint, idx.maxLayer); err != nil {
+		t.Fatalf("incremental graph is invalid: %v", err)
+	}
+}
+
+func TestAddVectorStoresNormalizedCosineVector(t *testing.T) {
+	idx, err := New(Config{Metric: MetricCosine, Dim: 2, M: 4, ConstructionL: 8})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	id, err := idx.AddVector([]float32{3, 4})
+	if err != nil {
+		t.Fatalf("AddVector returned error: %v", err)
+	}
+	if id != 0 {
+		t.Fatalf("AddVector id = %d, want 0", id)
+	}
+	if !almostEqual(idx.vectors[0], 0.6) || !almostEqual(idx.vectors[1], 0.8) {
+		t.Fatalf("stored cosine vector = %v, want normalized [0.6 0.8]", idx.vectors)
+	}
+}
+
+func TestAddVectorRejectsInvalidInputWithoutMutation(t *testing.T) {
+	idx := mustBuildIndex(t, Config{Dim: 2, M: 4, K0: 8, CandidateK: 8, ConstructionL: 12, Seed: 13}, [][]float32{{0, 0}, {1, 0}, {0, 1}})
+	vectors := append([]float32(nil), idx.vectors...)
+	levels := append([]int(nil), idx.levels...)
+	layers := copyLayers(idx.layers)
+	count := idx.count
+
+	if _, err := idx.AddVector([]float32{1}); err == nil {
+		t.Fatal("AddVector returned nil error for wrong dimension")
+	}
+	if idx.count != count || !reflect.DeepEqual(idx.vectors, vectors) || !reflect.DeepEqual(idx.levels, levels) || !reflect.DeepEqual(idx.layers, layers) {
+		t.Fatal("AddVector mutated index after invalid input")
+	}
+}
+
+func TestAddVectorAfterLoadIsDeterministic(t *testing.T) {
+	cfg := Config{Dim: 3, M: 6, K0: 12, CandidateK: 12, ConstructionL: 18, Seed: 17, Workers: 1, CandidateRecall: 0.90, CandidateControls: 12}
+	base := synth.UniformVectors(40, 3)
+	addition := []float32{0.125, 0.25, 0.5}
+
+	left := mustBuildIndex(t, cfg, base)
+	leftID, err := left.AddVector(addition)
+	if err != nil {
+		t.Fatalf("left AddVector returned error: %v", err)
+	}
+	right := roundTripIndex(t, mustBuildIndex(t, cfg, base))
+	rightID, err := right.AddVector(addition)
+	if err != nil {
+		t.Fatalf("right AddVector returned error: %v", err)
+	}
+	if leftID != rightID {
+		t.Fatalf("ids after AddVector = %d and %d, want equal", leftID, rightID)
+	}
+	assertIndexState(t, right, left)
+
+	reloaded := roundTripIndex(t, left)
+	got, err := reloaded.Search(addition, 1, 18)
+	if err != nil {
+		t.Fatalf("Search after AddVector round trip returned error: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != leftID {
+		t.Fatalf("Search after AddVector round trip = %v, want id %d", got, leftID)
+	}
+}
+
+func copyLayers(layers [][][]int) [][][]int {
+	out := make([][][]int, len(layers))
+	for layer := range layers {
+		out[layer] = make([][]int, len(layers[layer]))
+		for nodeID := range layers[layer] {
+			out[layer][nodeID] = append([]int(nil), layers[layer][nodeID]...)
+		}
+	}
+	return out
+}
+
 func TestSaveRejectsUnbuiltIndex(t *testing.T) {
 	idx, err := New(DefaultConfig())
 	if err != nil {

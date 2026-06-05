@@ -26,6 +26,10 @@ type Index struct {
 	entryPoint int
 	maxLayer   int
 	graphReady bool
+
+	// levelSampler is transient state for AddVector. It is reconstructed lazily
+	// from cfg.Seed and count after Load, so it is intentionally not persisted.
+	levelSampler *levelSampler
 }
 
 // New creates an index with validated configuration.
@@ -68,6 +72,7 @@ func (idx *Index) resetSearchableGraph() {
 	idx.entryPoint = -1
 	idx.maxLayer = -1
 	idx.graphReady = false
+	idx.levelSampler = nil
 }
 
 // Search returns the approximate nearest neighbors for query using HNSW graph
