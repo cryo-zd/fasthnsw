@@ -43,6 +43,8 @@ func New(cfg Config) (*Index, error) {
 
 // Build validates a dataset, copies it into the index-owned flat vector store,
 // and constructs the searchable FastHNSW graph.
+//
+// The vectors are assigned ID 0 through len(vectors)-1 in the order they appear in the input.
 func (idx *Index) Build(vectors [][]float32) error {
 	if idx == nil {
 		return fmt.Errorf("fasthnsw: nil index")

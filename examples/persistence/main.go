@@ -21,9 +21,9 @@ func main() {
 	}
 	if err := idx.Build([][]float32{
 		{0, 0},
-		{1, 0},
-		{0, 1},
-		{1, 1},
+		{0.2, 0},
+		{0, 0.4},
+		{0.8, 0.9},
 	}); err != nil {
 		panic(err)
 	}
@@ -51,7 +51,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	results, err := loaded.Search([]float32{0, 0}, 2, 4)
+	results, err := loaded.Search([]float32{0.6, 0}, 2, 4)
 	if err != nil {
 		panic(err)
 	}
