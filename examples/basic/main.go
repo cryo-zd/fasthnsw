@@ -20,16 +20,22 @@ func main() {
 	}
 
 	vectors := [][]float32{
-		{1, 0, 0},
-		{0, 1, 0},
-		{0, 0, 1},
-		{1, 1, 0},
+		{0.2, 0, 0},
+		{0, 0.5, 0},
+		{0, 0, 0.4},
+		{0.3, 0.2, 0},
 	}
 	if err := idx.Build(vectors); err != nil {
 		panic(err)
 	}
 
-	results, err := idx.Search([]float32{1, 0, 0}, 2, 4)
+	newID, err := idx.AddVector([]float32{0.4, 0.2, 0.8})
+	if err != nil {
+		panic(err)
+	}
+	_ = newID
+
+	results, err := idx.Search([]float32{0.3, 0, 0}, 2, 4)
 	if err != nil {
 		panic(err)
 	}
