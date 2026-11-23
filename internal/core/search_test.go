@@ -109,8 +109,8 @@ func newTestIndexWithGraph(t *testing.T, metric Metric, vectors [][]float32, lay
 
 func completeLayer(count int) [][]int {
 	layer := make([][]int, count)
-	for id := 0; id < count; id++ {
-		for neighborID := 0; neighborID < count; neighborID++ {
+	for id := range count {
+		for neighborID := range count {
 			if neighborID != id {
 				layer[id] = append(layer[id], neighborID)
 			}

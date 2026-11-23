@@ -81,11 +81,7 @@ func (idx *Index) buildStandardHNSWGraph() error {
 }
 
 func effectiveStandardEfConstruction(cfg Config) int {
-	efConstruction := cfg.ConstructionL
-	if efConstruction < cfg.M {
-		efConstruction = cfg.M
-	}
-	return efConstruction
+	return max(cfg.ConstructionL, cfg.M)
 }
 
 func (idx *Index) insertStandardHNSWNode(nodeID int, nodeLevel int, efConstruction int, scratch *graphSearchScratch) error {
@@ -113,10 +109,7 @@ func (idx *Index) insertStandardHNSWNode(nodeID int, nodeLevel int, efConstructi
 		}
 	}
 
-	minLayer := nodeLevel
-	if minLayer > oldMaxLayer {
-		minLayer = oldMaxLayer
-	}
+	minLayer := min(nodeLevel, oldMaxLayer)
 	for layer := minLayer; layer >= 0; layer-- {
 		candidates := graphSearchLayerFromEntries(idx.layers[layer], idx.vectors, idx.dim, idx.cfg.Metric, currentEntries, query, efConstruction, scratch)
 		selected, err := selectStandardHNSWNeighbors(nodeID, candidates, standardLayerMaxDegree(idx.cfg, layer), idx.layers[layer], idx.vectors, idx.dim, idx.cfg.Metric, false, false)
@@ -275,10 +268,8 @@ func resultIDs(results []Result) []int {
 }
 
 func appendUniqueInt(values []int, value int) []int {
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
+	if slices.Contains(values, value) {
+		return values
 	}
 	return append(values, value)
 }

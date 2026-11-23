@@ -3,9 +3,9 @@ package synth
 // UniformVectors returns deterministic pseudo-uniform vectors.
 func UniformVectors(count int, dim int) [][]float32 {
 	vectors := make([][]float32, count)
-	for id := 0; id < count; id++ {
+	for id := range count {
 		vector := make([]float32, dim)
-		for d := 0; d < dim; d++ {
+		for d := range dim {
 			v := (id+1)*(d+5)*37 + (id%11)*17 + d*13
 			vector[d] = float32(v%997) / 997
 		}
@@ -17,9 +17,9 @@ func UniformVectors(count int, dim int) [][]float32 {
 // UniformQueries returns deterministic pseudo-uniform query vectors.
 func UniformQueries(count int, dim int) [][]float32 {
 	queries := make([][]float32, count)
-	for id := 0; id < count; id++ {
+	for id := range count {
 		query := make([]float32, dim)
-		for d := 0; d < dim; d++ {
+		for d := range dim {
 			v := (id+3)*(d+7)*29 + id*19 + d*23
 			query[d] = float32(v%991) / 991
 		}
@@ -41,10 +41,10 @@ const (
 // ID-based Recall@k undercount equally good nearest neighbors.
 func ClusteredVectors(count int, dim int, clusters int) [][]float32 {
 	vectors := make([][]float32, count)
-	for id := 0; id < count; id++ {
+	for id := range count {
 		cluster := id % clusters
 		vector := make([]float32, dim)
-		for d := 0; d < dim; d++ {
+		for d := range dim {
 			vector[d] = clusteredCoordinate(id, d, dim, clusters, cluster, clusteredBaseJitter, 0x9e3779b97f4a7c15)
 		}
 		vectors[id] = vector
@@ -55,10 +55,10 @@ func ClusteredVectors(count int, dim int, clusters int) [][]float32 {
 // ClusteredQueries returns deterministic clustered query vectors.
 func ClusteredQueries(count int, dim int, clusters int) [][]float32 {
 	queries := make([][]float32, count)
-	for id := 0; id < count; id++ {
+	for id := range count {
 		cluster := id % clusters
 		query := make([]float32, dim)
-		for d := 0; d < dim; d++ {
+		for d := range dim {
 			query[d] = clusteredCoordinate(id, d, dim, clusters, cluster, clusteredQueryJitter, 0xd1b54a32d192ed03)
 		}
 		queries[id] = query

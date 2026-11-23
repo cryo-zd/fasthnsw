@@ -43,7 +43,7 @@ func mustBuildIndex(t *testing.T, cfg Config, vectors [][]float32) *Index {
 // benchmark data.
 func lineVectors(count int) [][]float32 {
 	vectors := make([][]float32, count)
-	for id := 0; id < count; id++ {
+	for id := range count {
 		vectors[id] = []float32{float32(id)}
 	}
 	return vectors

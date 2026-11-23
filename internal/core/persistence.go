@@ -196,7 +196,7 @@ func loadIndex(r io.Reader) (*Index, error) {
 	layers := make([][][]int, layerCount)
 	for layer := range layers {
 		layers[layer] = make([][]int, count)
-		for sourceID := 0; sourceID < count; sourceID++ {
+		for sourceID := range count {
 			degreeValue, err := readUint32(r)
 			if err != nil {
 				return nil, fmt.Errorf("fasthnsw: read layer %d node %d degree: %w", layer, sourceID, err)

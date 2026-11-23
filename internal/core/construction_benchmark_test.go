@@ -346,7 +346,7 @@ func measureConstructionQuality(b *testing.B, build func() (*Index, error), quer
 	const searchRepeats = 4
 	start := time.Now()
 	var searches int
-	for repeat := 0; repeat < searchRepeats; repeat++ {
+	for range searchRepeats {
 		for _, query := range queries {
 			if _, err := idx.Search(query, k, efSearch); err != nil {
 				b.Fatalf("Search returned error during QPS report: %v", err)

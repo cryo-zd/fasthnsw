@@ -134,7 +134,7 @@ func hdf5MatrixDimensions(dataset *hdf5.Dataset) (uint64, uint64, error) {
 	return rows, cols, nil
 }
 
-func hdf5FloatValues(raw interface{}) ([]float32, error) {
+func hdf5FloatValues(raw any) ([]float32, error) {
 	switch values := raw.(type) {
 	case []float32:
 		out := make([]float32, len(values))
@@ -163,7 +163,7 @@ func hdf5FloatValues(raw interface{}) ([]float32, error) {
 	}
 }
 
-func hdf5IntValues(raw interface{}) ([]int, error) {
+func hdf5IntValues(raw any) ([]int, error) {
 	switch values := raw.(type) {
 	case []int:
 		out := make([]int, len(values))
@@ -209,7 +209,7 @@ func reshapeFloat32(values []float32, rows int, cols int) ([][]float32, error) {
 		return nil, fmt.Errorf("matrix value count %d does not match dimensions %dx%d", len(values), rows, cols)
 	}
 	out := make([][]float32, rows)
-	for row := 0; row < rows; row++ {
+	for row := range rows {
 		vector := make([]float32, cols)
 		copy(vector, values[row*cols:(row+1)*cols])
 		out[row] = vector
@@ -225,7 +225,7 @@ func reshapeInts(values []int, rows int, cols int) ([][]int, error) {
 		return nil, fmt.Errorf("matrix value count %d does not match dimensions %dx%d", len(values), rows, cols)
 	}
 	out := make([][]int, rows)
-	for row := 0; row < rows; row++ {
+	for row := range rows {
 		vector := make([]int, cols)
 		copy(vector, values[row*cols:(row+1)*cols])
 		out[row] = vector

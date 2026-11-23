@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 	"math"
-	"sort"
+	"slices"
 )
 
 const maxAlphaDegrees = 180
@@ -101,8 +101,8 @@ func normalizePruneCandidates(sourceID int, candidates []candidate, vectors []fl
 	for _, next := range seen {
 		out = append(out, next)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		return betterCandidate(out[i], out[j])
+	slices.SortFunc(out, func(a, b candidate) int {
+		return compareDistanceID(a.distance, a.id, b.distance, b.id)
 	})
 	return out, nil
 }
@@ -119,7 +119,7 @@ func angleUWVGreaterThanAlpha(sourceID int, acceptedID int, candidateID int, vec
 	var dotProduct float64
 	var normUW float64
 	var normVW float64
-	for i := 0; i < dim; i++ {
+	for i := range dim {
 		uw := float64(u[i] - w[i])
 		vw := float64(v[i] - w[i])
 		dotProduct += uw * vw
