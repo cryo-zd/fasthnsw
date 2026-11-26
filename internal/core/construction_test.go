@@ -2,7 +2,7 @@ package core
 
 import (
 	"reflect"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/cryo-zd/fasthnsw/internal/synth"
@@ -289,7 +289,7 @@ func TestConstructionLayoutLayerPrefixesContainLayerNodeSets(t *testing.T) {
 
 	for layer := range layout.layerCounts {
 		got := append([]int(nil), layout.labels[:layout.layerCounts[layer]]...)
-		sort.Ints(got)
+		slices.Sort(got)
 		want := nodesWithLevelAtLeast(levels, layer)
 		assertIntSlice(t, got, want)
 	}

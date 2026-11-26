@@ -37,10 +37,7 @@ func exactCandidates(vectors []float32, dim int, metric Metric, k int, workers i
 		return out, nil
 	}
 
-	limit := k
-	if limit > count-1 {
-		limit = count - 1
-	}
+	limit := min(k, count-1)
 
 	err := parallelForNodes(count, workers, func(_ int, sourceID int) error {
 		out[sourceID] = exactCandidatesForNode(vectors, dim, metric, sourceID, limit)
@@ -59,7 +56,7 @@ func exactCandidatesForNode(vectors []float32, dim int, metric Metric, sourceID 
 	best := make(candidateMaxHeap, 0, limit)
 
 	count := len(vectors) / dim
-	for id := 0; id < count; id++ {
+	for id := range count {
 		if id == sourceID {
 			continue
 		}
@@ -107,10 +104,7 @@ func approximateKNNGCandidates(vectors []float32, dim int, metric Metric, k int,
 		return out, nil
 	}
 
-	limit := k
-	if limit > count-1 {
-		limit = count - 1
-	}
+	limit := min(k, count-1)
 	if count <= limit+1 {
 		return exactCandidates(vectors, dim, metric, limit, workers)
 	}
@@ -126,11 +120,8 @@ func approximateKNNGCandidates(vectors []float32, dim int, metric Metric, k int,
 		return nil, err
 	}
 
-	rounds := iterations
-	if rounds < 1 {
-		rounds = 1
-	}
-	for round := 0; round < rounds; round++ {
+	rounds := max(iterations, 1)
+	for range rounds {
 		reverse := reverseCandidateIDs(out, count)
 		next := make([][]candidate, count)
 		err := parallelForNodes(count, workers, func(workerID int, sourceID int) error {
@@ -220,7 +211,7 @@ func reverseCandidateIDs(candidates [][]candidate, count int) [][]int {
 			positions[candidate.id]++
 		}
 	}
-	for id := 0; id < count; id++ {
+	for id := range count {
 		reverse[id] = storage[offsets[id]:offsets[id+1]]
 	}
 	return reverse

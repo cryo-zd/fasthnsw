@@ -30,7 +30,7 @@ func ExactTopK(vectors []float32, dim int, metric Metric, query []float32, k int
 	}
 
 	results := make(resultMaxHeap, 0, k)
-	for id := 0; id < count; id++ {
+	for id := range count {
 		result := Result{
 			ID:       id,
 			Distance: distance(metric, vectorAt(vectors, dim, id), query),

@@ -25,11 +25,8 @@ func CountHitsAtK(got []int, truth []int, k int) (hits int, total int) {
 		total++
 	}
 
-	limit := k
-	if limit > len(got) {
-		limit = len(got)
-	}
-	for i := 0; i < limit; i++ {
+	limit := min(k, len(got))
+	for i := range limit {
 		if truthIDs[got[i]] {
 			hits++
 		}

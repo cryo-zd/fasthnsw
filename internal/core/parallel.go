@@ -10,10 +10,7 @@ func effectiveWorkerCount(workers int, count int) int {
 	if workers <= 1 || count <= 1 {
 		return 1
 	}
-	if workers > count {
-		return count
-	}
-	return workers
+	return min(workers, count)
 }
 
 // parallelForNodes runs fn over node ids [0,count) using deterministic
@@ -29,7 +26,7 @@ func effectiveWorkerCount(workers int, count int) int {
 func parallelForNodes(count int, workers int, fn func(workerID int, nodeID int) error) error {
 	workerCount := effectiveWorkerCount(workers, count)
 	if workerCount == 1 {
-		for nodeID := 0; nodeID < count; nodeID++ {
+		for nodeID := range count {
 			if err := fn(0, nodeID); err != nil {
 				return err
 			}
@@ -39,22 +36,20 @@ func parallelForNodes(count int, workers int, fn func(workerID int, nodeID int) 
 
 	errs := make([]error, count)
 	var wg sync.WaitGroup
-	for workerID := 0; workerID < workerCount; workerID++ {
+	for workerID := range workerCount {
 		start := workerID * count / workerCount
 		end := (workerID + 1) * count / workerCount
-		wg.Add(1)
-		go func(workerID int, start int, end int) {
-			defer wg.Done()
+		wg.Go(func() {
 			for nodeID := start; nodeID < end; nodeID++ {
 				if err := fn(workerID, nodeID); err != nil {
 					errs[nodeID] = err
 				}
 			}
-		}(workerID, start, end)
+		})
 	}
 	wg.Wait()
 
-	for nodeID := 0; nodeID < count; nodeID++ {
+	for nodeID := range count {
 		if errs[nodeID] != nil {
 			return errs[nodeID]
 		}

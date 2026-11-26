@@ -73,7 +73,7 @@ func (d Dataset) Validate(k int) error {
 		if len(neighbors) < k {
 			return fmt.Errorf("ground truth row %d has %d neighbors, want at least %d", i, len(neighbors), k)
 		}
-		for rank := 0; rank < k; rank++ {
+		for rank := range k {
 			if neighbors[rank] < 0 || neighbors[rank] >= len(d.Base) {
 				return fmt.Errorf("ground truth row %d rank %d has id %d outside loaded base size %d", i, rank, neighbors[rank], len(d.Base))
 			}

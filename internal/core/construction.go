@@ -3,7 +3,7 @@ package core
 import (
 	"math"
 	"math/rand"
-	"sort"
+	"slices"
 
 	"github.com/cryo-zd/fasthnsw/internal/eval"
 )
@@ -110,7 +110,7 @@ func assignLevels(count int, maxDegree int, seed int64) []int {
 	}
 
 	rng := rand.New(rand.NewSource(seed))
-	for id := 0; id < count; id++ {
+	for id := range count {
 		levels[id] = sampleLevel(rng, maxDegree)
 	}
 	return levels
@@ -185,8 +185,8 @@ func buildCompleteLayer(labels []int, totalCount int, vectors []float32, dim int
 				distance: distance(metric, source, vectorAt(vectors, dim, neighborLocalID)),
 			})
 		}
-		sort.Slice(neighbors, func(i, j int) bool {
-			return betterCandidate(neighbors[i], neighbors[j])
+		slices.SortFunc(neighbors, func(a, b candidate) int {
+			return compareDistanceID(a.distance, a.id, b.distance, b.id)
 		})
 		adjacency[sourceID] = candidateIDs(neighbors)
 	}
@@ -198,14 +198,8 @@ func buildCompleteLayer(labels []int, totalCount int, vectors []float32, dim int
 // index's global node ids. labels are the Algorithm 7 construction labels for
 // this layer prefix, and vectors is the compact vector prefix in that order.
 func buildIterNSGLayer(layer int, labels []int, totalCount int, vectors []float32, dim int, cfg Config, maxDegree int) ([][]int, error) {
-	initialK := cfg.K0
-	if initialK > len(labels)-1 {
-		initialK = len(labels) - 1
-	}
-	candidateK := cfg.CandidateK
-	if candidateK > len(labels)-1 {
-		candidateK = len(labels) - 1
-	}
+	initialK := min(cfg.K0, len(labels)-1)
+	candidateK := min(cfg.CandidateK, len(labels)-1)
 
 	initialKNNG, err := approximateKNNGCandidates(
 		vectors,
@@ -220,10 +214,7 @@ func buildIterNSGLayer(layer int, labels []int, totalCount int, vectors []float3
 		return nil, err
 	}
 
-	searchEf := cfg.ConstructionL
-	if searchEf > len(labels)-1 {
-		searchEf = len(labels) - 1
-	}
+	searchEf := min(cfg.ConstructionL, len(labels)-1)
 	initialGraph := candidatesToAdjacency(initialKNNG)
 	candidates := acquireCandidatesByGraphSearch(initialGraph, vectors, dim, cfg.Metric, candidateK, searchEf, cfg.Workers)
 
@@ -386,7 +377,7 @@ func selectCandidateControls(count int, maxControls int, seed int64) []int {
 	rng := rand.New(rand.NewSource(seed))
 	perm := rng.Perm(count)
 	controls := append([]int(nil), perm[:maxControls]...)
-	sort.Ints(controls)
+	slices.Sort(controls)
 	return controls
 }
 
